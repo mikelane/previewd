@@ -1,0 +1,132 @@
+version: "2"
+
+# golangci-lint v2 configuration for Previewd
+# Extends Kubebuilder defaults with production-quality linters
+# See: https://golangci-lint.run/docs/configuration/
+
+run:
+  timeout: 5m
+  tests: true
+  allow-parallel-runners: true
+
+linters:
+  default: none
+  enable:
+    # Kubebuilder defaults
+    - copyloopvar
+    - dupl
+    - errcheck
+    - ginkgolinter
+    - goconst
+    - gocyclo
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - nakedret
+    - prealloc
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+
+    # Additional production linters
+    - bodyclose        # Checks HTTP response body is closed
+    - noctx            # Finds HTTP requests without context.Context
+    - gosec            # Security-focused linter (OWASP)
+    - errname          # Checks error names follow conventions
+    - errorlint        # Find code that will cause problems with error wrapping
+    - godox            # Detects FIXME, TODO, and other comment tags
+    - wastedassign     # Finds wasted assignment statements
+    - whitespace       # Detects leading/trailing whitespace
+
+  settings:
+    revive:
+      rules:
+        - name: comment-spacings
+        - name: import-shadowing
+        # Additional revive rules for production code
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unreachable-code
+
+    gocyclo:
+      min-complexity: 15
+
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+
+    misspell:
+      locale: US
+
+    govet:
+      enable-all: true
+
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+
+    gosec:
+      excludes:
+        - G404 # Use of weak random number generator - OK for non-crypto use
+
+  exclusions:
+    generated: lax
+    rules:
+      - linters:
+          - lll
+        path: api/*
+      - linters:
+          - dupl
+          - lll
+        path: internal/*
+      # Exclude test files from some linters
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - gosec
+          - goconst
+      # Exclude generated files
+      - path: zz_generated\.deepcopy\.go
+        linters:
+          - all
+      # Kubebuilder markers generate long lines
+      - source: "^//\\+kubebuilder"
+        linters:
+          - lll
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+
+# Issues configuration
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false
+  fix: false
+
+# Formatters (golangci-lint v2)
+formatters:
+  enable:
+    - gofmt
+    - goimports
+    - gci
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

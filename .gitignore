@@ -1,0 +1,89 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+testbin/
+dist/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.txt
+coverage.html
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Kubebuilder
+/config/crd/bases
+
+# Kustomize
+config/default/kustomization.yaml
+
+# Temporary files
+tmp/
+*.tmp
+*.log
+
+# Kubernetes
+*.kubeconfig
+kubeconfig
+
+# Environment files
+.env
+.env.local
+*.env
+
+# Secrets
+secrets/
+*.key
+*.pem
+
+# Build artifacts
+*.tar.gz
+*.zip
+
+# OS specific
+Thumbs.db
+
+# Documentation build
+site/
+docs/_build/
+
+# Python (if using Python scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+
+# Node (if using Node tooling)
+node_modules/
+package-lock.json
+
+# Helm
+charts/*.tgz
+
+# Local development
+/local/
+kind-config.yaml
+
+# Untracked documentation (local reference only)
+GO_BEST_PRACTICES.md

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(make lint-config:*)",
+      "Bash(make lint:*)",
+      "Bash(make lint-fix:*)",
+      "Bash(go version:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
