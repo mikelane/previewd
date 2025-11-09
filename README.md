@@ -58,9 +58,9 @@ git push origin feature/new-auth
 - [x] Project vision defined
 - [x] Architecture designed
 - [x] Documentation created
-- [ ] Go environment setup
-- [ ] Kubebuilder operator scaffold
-- [ ] Custom Resource Definitions
+- [x] Go environment setup
+- [x] Kubebuilder operator scaffold
+- [x] Custom Resource Definitions (v1alpha1)
 - [ ] Basic reconciliation loop
 - [ ] GitHub webhook integration
 - [ ] ArgoCD integration
@@ -191,48 +191,66 @@ make docker-build docker-push IMG=your-registry/previewd:latest
 
 ## Custom Resource Example
 
+### Minimal Example
+
 ```yaml
-apiVersion: previewd.io/v1alpha1
+apiVersion: preview.previewd.io/v1alpha1
+kind: PreviewEnvironment
+metadata:
+  name: pr-123
+spec:
+  repository: myorg/myrepo
+  prNumber: 123
+  headSHA: 1234567890abcdef1234567890abcdef12345678
+```
+
+### Complete Example
+
+```yaml
+apiVersion: preview.previewd.io/v1alpha1
 kind: PreviewEnvironment
 metadata:
   name: pr-1234-feature-auth
 spec:
+  # Required fields
+  repository: myorg/myapp
   prNumber: 1234
-  repository: "myorg/myapp"
-  branch: "feature/new-auth"
+  headSHA: abcdef1234567890abcdef1234567890abcdef12
 
-  # AI will determine these, but can be overridden
+  # Optional fields
+  baseBranch: main
+  headBranch: feature/new-auth
+  ttl: "8h"
   services:
-    - name: auth-service
-      autoDetected: true
-    - name: user-service
-      autoDetected: true
-
-  # AI-generated test data config
-  testData:
-    strategy: synthetic  # or: production-snapshot, minimal
-    aiModel: gpt-4
-    users: 100
-    orders: 500
-
-  # Cost optimization
-  ttl: "4h"  # AI can extend if PR activity continues
-  resources:
-    tier: "small"  # AI chooses: minimal, small, medium, large
-
-  # Integration tests
-  tests:
-    enabled: true
-    framework: pytest
-    selector: "ai-smart"  # AI picks which tests to run
+    - api
+    - web
+    - worker
 
 status:
-  phase: "Ready"
-  url: "https://pr-1234.preview.myapp.com"
-  cost: "$2.34/day"
-  testsRun: 42
-  testsPassed: 41
+  phase: Ready
+  url: https://pr-1234.preview.example.com
+  namespace: preview-pr-1234
+  services:
+    - name: api
+      ready: true
+      url: https://api-pr-1234.preview.example.com
+    - name: web
+      ready: true
+      url: https://pr-1234.preview.example.com
+  costEstimate:
+    currency: USD
+    hourlyCost: "0.15"
+    totalCost: "1.20"
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: ServicesReady
+      message: All services are healthy
+  createdAt: "2025-11-09T08:00:00Z"
+  expiresAt: "2025-11-09T16:00:00Z"
 ```
+
+For detailed API documentation, see [docs/api-reference.md](docs/api-reference.md).
 
 ## Why Previewd?
 
