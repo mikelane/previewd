@@ -31,6 +31,7 @@ type PreviewEnvironmentSpec struct {
 	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
 
 	// Repository is the GitHub repository in "owner/repo" format
+	// +kubebuilder:validation:Pattern="^[a-zA-Z0-9-]+/[a-zA-Z0-9-]+$"
 	Repository string `json:"repository"`
 }
 

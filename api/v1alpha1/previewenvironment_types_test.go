@@ -37,5 +37,21 @@ var _ = Describe("PreviewEnvironment", func() {
 
 			Expect(preview.Spec.Repository).To(Equal("owner/repo"))
 		})
+
+		It("rejects invalid repository format via Kubernetes API validation", func() {
+			preview := &PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "invalid-repo-test",
+					Namespace: "default",
+				},
+				Spec: PreviewEnvironmentSpec{
+					Repository: "invalid-format",
+				},
+			}
+
+			err := k8sClient.Create(ctx, preview)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("spec.repository"))
+		})
 	})
 })
