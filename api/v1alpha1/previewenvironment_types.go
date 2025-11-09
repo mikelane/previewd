@@ -34,10 +34,6 @@ type PreviewEnvironmentSpec struct {
 	// +kubebuilder:validation:Pattern="^[a-zA-Z0-9-]+/[a-zA-Z0-9-]+$"
 	Repository string `json:"repository"`
 
-	// PRNumber is the pull request number
-	// +kubebuilder:validation:Minimum=1
-	PRNumber int `json:"prNumber"`
-
 	// HeadSHA is the commit SHA of the PR head (40 character hex string)
 	// +kubebuilder:validation:Pattern="^[a-f0-9]{40}$"
 	HeadSHA string `json:"headSHA"`
@@ -50,14 +46,18 @@ type PreviewEnvironmentSpec struct {
 	// +optional
 	HeadBranch string `json:"headBranch,omitempty"`
 
-	// Services is a list of service names to deploy (optional)
-	// +optional
-	Services []string `json:"services,omitempty"`
-
 	// TTL is the time-to-live duration for the preview environment
 	// +kubebuilder:default="4h"
 	// +optional
 	TTL string `json:"ttl,omitempty"`
+
+	// Services is a list of service names to deploy (optional)
+	// +optional
+	Services []string `json:"services,omitempty"`
+
+	// PRNumber is the pull request number
+	// +kubebuilder:validation:Minimum=1
+	PRNumber int `json:"prNumber"`
 }
 
 // PreviewEnvironmentStatus defines the observed state of PreviewEnvironment.
@@ -82,6 +82,10 @@ type PreviewEnvironmentStatus struct {
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
+	// Services contains status information for deployed services
+	// +optional
+	Services []ServiceStatus `json:"services,omitempty"`
+
 	// Phase represents the current phase of the preview environment
 	// Valid values: Pending, Creating, Ready, Updating, Deleting, Failed
 	// +kubebuilder:validation:Enum=Pending;Creating;Ready;Updating;Deleting;Failed
@@ -95,10 +99,6 @@ type PreviewEnvironmentStatus struct {
 	// Namespace is the Kubernetes namespace created for this preview environment
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
-
-	// Services contains status information for deployed services
-	// +optional
-	Services []ServiceStatus `json:"services,omitempty"`
 
 	// CostEstimate provides estimated costs for running this environment
 	// +optional
@@ -126,12 +126,12 @@ type ServiceStatus struct {
 	// Name is the service name
 	Name string `json:"name"`
 
-	// Ready indicates if the service is ready
-	Ready bool `json:"ready"`
-
 	// URL is the service URL (if exposed)
 	// +optional
 	URL string `json:"url,omitempty"`
+
+	// Ready indicates if the service is ready
+	Ready bool `json:"ready"`
 }
 
 // CostEstimate provides cost estimation for the preview environment
@@ -163,13 +163,13 @@ type PreviewEnvironment struct {
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty,omitzero"`
 
-	// spec defines the desired state of PreviewEnvironment
-	// +required
-	Spec PreviewEnvironmentSpec `json:"spec"`
-
 	// status defines the observed state of PreviewEnvironment
 	// +optional
 	Status PreviewEnvironmentStatus `json:"status,omitempty,omitzero"`
+
+	// spec defines the desired state of PreviewEnvironment
+	// +required
+	Spec PreviewEnvironmentSpec `json:"spec"`
 }
 
 // +kubebuilder:object:root=true
