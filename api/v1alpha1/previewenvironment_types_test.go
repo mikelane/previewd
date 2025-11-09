@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe("PreviewEnvironment", func() {
@@ -99,11 +100,11 @@ var _ = Describe("PreviewEnvironment", func() {
 				Spec: PreviewEnvironmentSpec{
 					Repository: "owner/repo",
 					PRNumber:   123,
-					HeadSHA:    "abc1234567890def1234567890abc1234567890",
+					HeadSHA:    "1234567890abcdef1234567890abcdef12345678",
 				},
 			}
 
-			Expect(preview.Spec.HeadSHA).To(Equal("abc1234567890def1234567890abc1234567890"))
+			Expect(preview.Spec.HeadSHA).To(Equal("1234567890abcdef1234567890abcdef12345678"))
 		})
 
 		It("rejects invalid SHA format", func() {
@@ -125,6 +126,63 @@ var _ = Describe("PreviewEnvironment", func() {
 		})
 	})
 
+	Context("TTL field", func() {
+		It("defaults to 4h when not provided", func() {
+			preview := &PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ttl-default-test",
+					Namespace: "default",
+				},
+				Spec: PreviewEnvironmentSpec{
+					Repository: "owner/repo",
+					PRNumber:   123,
+					HeadSHA:    "abc1234567890def1234567890abc12345678901",
+				},
+			}
+
+			// Create the resource
+			err := k8sClient.Create(ctx, preview)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Fetch it back
+			fetched := &PreviewEnvironment{}
+			err = k8sClient.Get(ctx, client.ObjectKeyFromObject(preview), fetched)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify TTL is set to default
+			Expect(fetched.Spec.TTL).To(Equal("4h"))
+
+			// Cleanup
+			err = k8sClient.Delete(ctx, preview)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("accepts custom TTL when provided", func() {
+			preview := &PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ttl-custom-test",
+					Namespace: "default",
+				},
+				Spec: PreviewEnvironmentSpec{
+					Repository: "owner/repo",
+					PRNumber:   123,
+					HeadSHA:    "1234567890abcdef1234567890abcdef12345678",
+					TTL:        "8h",
+				},
+			}
+
+			err := k8sClient.Create(ctx, preview)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify TTL is the custom value
+			Expect(preview.Spec.TTL).To(Equal("8h"))
+
+			// Cleanup
+			err = k8sClient.Delete(ctx, preview)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
 	Context("Optional fields", func() {
 		It("accepts BaseBranch when provided", func() {
 			preview := &PreviewEnvironment{
@@ -135,7 +193,7 @@ var _ = Describe("PreviewEnvironment", func() {
 				Spec: PreviewEnvironmentSpec{
 					Repository: "owner/repo",
 					PRNumber:   123,
-					HeadSHA:    "abc1234567890def1234567890abc1234567890",
+					HeadSHA:    "1234567890abcdef1234567890abcdef12345678",
 					BaseBranch: "main",
 				},
 			}
@@ -152,7 +210,7 @@ var _ = Describe("PreviewEnvironment", func() {
 				Spec: PreviewEnvironmentSpec{
 					Repository: "owner/repo",
 					PRNumber:   123,
-					HeadSHA:    "abc1234567890def1234567890abc1234567890",
+					HeadSHA:    "1234567890abcdef1234567890abcdef12345678",
 					HeadBranch: "feature/test",
 				},
 			}
@@ -169,7 +227,7 @@ var _ = Describe("PreviewEnvironment", func() {
 				Spec: PreviewEnvironmentSpec{
 					Repository: "owner/repo",
 					PRNumber:   123,
-					HeadSHA:    "abc1234567890def1234567890abc1234567890",
+					HeadSHA:    "1234567890abcdef1234567890abcdef12345678",
 					Services:   []string{"api", "web", "worker"},
 				},
 			}
@@ -189,7 +247,7 @@ var _ = Describe("PreviewEnvironment", func() {
 				Spec: PreviewEnvironmentSpec{
 					Repository: "owner/repo",
 					PRNumber:   123,
-					HeadSHA:    "abc1234567890def1234567890abc1234567890",
+					HeadSHA:    "1234567890abcdef1234567890abcdef12345678",
 				},
 				Status: PreviewEnvironmentStatus{
 					Phase: "Ready",
@@ -208,7 +266,7 @@ var _ = Describe("PreviewEnvironment", func() {
 				Spec: PreviewEnvironmentSpec{
 					Repository: "owner/repo",
 					PRNumber:   123,
-					HeadSHA:    "abc1234567890def1234567890abc1234567890",
+					HeadSHA:    "1234567890abcdef1234567890abcdef12345678",
 				},
 				Status: PreviewEnvironmentStatus{
 					URL: "https://pr-123.preview.example.com",
@@ -227,7 +285,7 @@ var _ = Describe("PreviewEnvironment", func() {
 				Spec: PreviewEnvironmentSpec{
 					Repository: "owner/repo",
 					PRNumber:   123,
-					HeadSHA:    "abc1234567890def1234567890abc1234567890",
+					HeadSHA:    "1234567890abcdef1234567890abcdef12345678",
 				},
 				Status: PreviewEnvironmentStatus{
 					Namespace: "preview-pr-123",
@@ -247,7 +305,7 @@ var _ = Describe("PreviewEnvironment", func() {
 				Spec: PreviewEnvironmentSpec{
 					Repository: "owner/repo",
 					PRNumber:   123,
-					HeadSHA:    "abc1234567890def1234567890abc1234567890",
+					HeadSHA:    "1234567890abcdef1234567890abcdef12345678",
 				},
 				Status: PreviewEnvironmentStatus{
 					CreatedAt:          &now,
@@ -261,6 +319,74 @@ var _ = Describe("PreviewEnvironment", func() {
 			Expect(preview.Status.ExpiresAt).NotTo(BeNil())
 			Expect(preview.Status.LastSyncedAt).NotTo(BeNil())
 			Expect(preview.Status.ObservedGeneration).To(Equal(int64(1)))
+		})
+	})
+
+	Context("Complete valid PreviewEnvironment", func() {
+		It("creates successfully with all required fields", func() {
+			preview := &PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "complete-valid-test",
+					Namespace: "default",
+				},
+				Spec: PreviewEnvironmentSpec{
+					Repository: "myorg/myrepo",
+					PRNumber:   123,
+					HeadSHA:    "1234567890abcdef1234567890abcdef12345678",
+				},
+			}
+
+			err := k8sClient.Create(ctx, preview)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Fetch it back
+			fetched := &PreviewEnvironment{}
+			err = k8sClient.Get(ctx, client.ObjectKeyFromObject(preview), fetched)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify spec fields
+			Expect(fetched.Spec.Repository).To(Equal("myorg/myrepo"))
+			Expect(fetched.Spec.PRNumber).To(Equal(123))
+			Expect(fetched.Spec.HeadSHA).To(Equal("1234567890abcdef1234567890abcdef12345678"))
+			Expect(fetched.Spec.TTL).To(Equal("4h")) // Default
+
+			// Cleanup
+			err = k8sClient.Delete(ctx, preview)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("allows status updates", func() {
+			preview := &PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "status-update-test",
+					Namespace: "default",
+				},
+				Spec: PreviewEnvironmentSpec{
+					Repository: "myorg/myrepo",
+					PRNumber:   456,
+					HeadSHA:    "def4567890abc1234def4567890abc1234def456",
+				},
+			}
+
+			err := k8sClient.Create(ctx, preview)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Update status
+			preview.Status.Phase = "Ready"
+			preview.Status.URL = "https://pr-456.preview.example.com"
+			err = k8sClient.Status().Update(ctx, preview)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Fetch and verify
+			fetched := &PreviewEnvironment{}
+			err = k8sClient.Get(ctx, client.ObjectKeyFromObject(preview), fetched)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fetched.Status.Phase).To(Equal("Ready"))
+			Expect(fetched.Status.URL).To(Equal("https://pr-456.preview.example.com"))
+
+			// Cleanup
+			err = k8sClient.Delete(ctx, preview)
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 })
