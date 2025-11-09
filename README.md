@@ -72,37 +72,31 @@ See [ROADMAP.md](ROADMAP.md) for detailed timeline.
 
 ## Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                       Previewd Operator                      │
-├─────────────────────────────────────────────────────────────┤
-│                                                               │
-│  ┌──────────────┐  ┌───────────────┐  ┌──────────────────┐ │
-│  │   GitHub     │  │  AI Engine    │  │  Data Generator  │ │
-│  │  Webhook     │  │  (Code        │  │  (Synthetic      │ │
-│  │  Handler     │  │   Analysis)   │  │   Data)          │ │
-│  └──────────────┘  └───────────────┘  └──────────────────┘ │
-│         │                  │                    │            │
-│         └──────────────────┴────────────────────┘            │
-│                            │                                 │
-│                   ┌────────▼────────┐                        │
-│                   │  Reconciliation  │                        │
-│                   │      Loop        │                        │
-│                   └────────┬────────┘                        │
-│                            │                                 │
-│         ┌──────────────────┼──────────────────┐             │
-│         │                  │                  │             │
-│  ┌──────▼──────┐  ┌────────▼───────┐  ┌──────▼──────┐      │
-│  │ Environment │  │    ArgoCD       │  │   Cost      │      │
-│  │ Controller  │  │    Integration  │  │  Optimizer  │      │
-│  └─────────────┘  └────────────────┘  └─────────────┘      │
-│                                                               │
-└───────────────────────────┬───────────────────────────────────┘
-                            │
-                   ┌────────▼────────┐
-                   │   Kubernetes    │
-                   │     Cluster     │
-                   └─────────────────┘
+```mermaid
+graph TB
+    subgraph "Previewd Operator"
+        GH[GitHub Webhook Handler]
+        AI[AI Engine<br/>Code Analysis]
+        DG[Data Generator<br/>Synthetic Data]
+
+        GH --> RL[Reconciliation Loop]
+        AI --> RL
+        DG --> RL
+
+        RL --> EC[Environment Controller]
+        RL --> ARGO[ArgoCD Integration]
+        RL --> CO[Cost Optimizer]
+    end
+
+    EC --> K8S[Kubernetes Cluster]
+    ARGO --> K8S
+    CO --> K8S
+
+    style GH fill:#4CAF50
+    style AI fill:#2196F3
+    style DG fill:#FF9800
+    style RL fill:#9C27B0
+    style K8S fill:#326CE5
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design.
