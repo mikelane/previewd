@@ -30,9 +30,8 @@ type PreviewEnvironmentSpec struct {
 	// The following markers will use OpenAPI v3 schema to validate the value
 	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
 
-	// foo is an example field of PreviewEnvironment. Edit previewenvironment_types.go to remove/update
-	// +optional
-	Foo *string `json:"foo,omitempty"`
+	// Repository is the GitHub repository in "owner/repo" format
+	Repository string `json:"repository"`
 }
 
 // PreviewEnvironmentStatus defines the observed state of PreviewEnvironment.
