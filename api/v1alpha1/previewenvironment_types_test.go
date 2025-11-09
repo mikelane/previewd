@@ -54,4 +54,128 @@ var _ = Describe("PreviewEnvironment", func() {
 			Expect(err.Error()).To(ContainSubstring("spec.repository"))
 		})
 	})
+
+	Context("PRNumber field", func() {
+		It("exists and accepts valid PR number", func() {
+			preview := &PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pr-test",
+					Namespace: "default",
+				},
+				Spec: PreviewEnvironmentSpec{
+					Repository: "owner/repo",
+					PRNumber:   123,
+				},
+			}
+
+			Expect(preview.Spec.PRNumber).To(Equal(123))
+		})
+
+		It("rejects PR number less than 1", func() {
+			preview := &PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "invalid-pr-test",
+					Namespace: "default",
+				},
+				Spec: PreviewEnvironmentSpec{
+					Repository: "owner/repo",
+					PRNumber:   0,
+				},
+			}
+
+			err := k8sClient.Create(ctx, preview)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("spec.prNumber"))
+		})
+	})
+
+	Context("HeadSHA field", func() {
+		It("exists and accepts valid 40-character SHA", func() {
+			preview := &PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "sha-test",
+					Namespace: "default",
+				},
+				Spec: PreviewEnvironmentSpec{
+					Repository: "owner/repo",
+					PRNumber:   123,
+					HeadSHA:    "abc1234567890def1234567890abc1234567890",
+				},
+			}
+
+			Expect(preview.Spec.HeadSHA).To(Equal("abc1234567890def1234567890abc1234567890"))
+		})
+
+		It("rejects invalid SHA format", func() {
+			preview := &PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "invalid-sha-test",
+					Namespace: "default",
+				},
+				Spec: PreviewEnvironmentSpec{
+					Repository: "owner/repo",
+					PRNumber:   123,
+					HeadSHA:    "short",
+				},
+			}
+
+			err := k8sClient.Create(ctx, preview)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("spec.headSHA"))
+		})
+	})
+
+	Context("Optional fields", func() {
+		It("accepts BaseBranch when provided", func() {
+			preview := &PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "basebranch-test",
+					Namespace: "default",
+				},
+				Spec: PreviewEnvironmentSpec{
+					Repository: "owner/repo",
+					PRNumber:   123,
+					HeadSHA:    "abc1234567890def1234567890abc1234567890",
+					BaseBranch: "main",
+				},
+			}
+
+			Expect(preview.Spec.BaseBranch).To(Equal("main"))
+		})
+
+		It("accepts HeadBranch when provided", func() {
+			preview := &PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "headbranch-test",
+					Namespace: "default",
+				},
+				Spec: PreviewEnvironmentSpec{
+					Repository: "owner/repo",
+					PRNumber:   123,
+					HeadSHA:    "abc1234567890def1234567890abc1234567890",
+					HeadBranch: "feature/test",
+				},
+			}
+
+			Expect(preview.Spec.HeadBranch).To(Equal("feature/test"))
+		})
+
+		It("accepts Services slice when provided", func() {
+			preview := &PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "services-test",
+					Namespace: "default",
+				},
+				Spec: PreviewEnvironmentSpec{
+					Repository: "owner/repo",
+					PRNumber:   123,
+					HeadSHA:    "abc1234567890def1234567890abc1234567890",
+					Services:   []string{"api", "web", "worker"},
+				},
+			}
+
+			Expect(preview.Spec.Services).To(HaveLen(3))
+			Expect(preview.Spec.Services).To(ContainElements("api", "web", "worker"))
+		})
+	})
 })

@@ -33,6 +33,31 @@ type PreviewEnvironmentSpec struct {
 	// Repository is the GitHub repository in "owner/repo" format
 	// +kubebuilder:validation:Pattern="^[a-zA-Z0-9-]+/[a-zA-Z0-9-]+$"
 	Repository string `json:"repository"`
+
+	// PRNumber is the pull request number
+	// +kubebuilder:validation:Minimum=1
+	PRNumber int `json:"prNumber"`
+
+	// HeadSHA is the commit SHA of the PR head (40 character hex string)
+	// +kubebuilder:validation:Pattern="^[a-f0-9]{40}$"
+	HeadSHA string `json:"headSHA"`
+
+	// BaseBranch is the base branch name (optional)
+	// +optional
+	BaseBranch string `json:"baseBranch,omitempty"`
+
+	// HeadBranch is the head branch name (optional)
+	// +optional
+	HeadBranch string `json:"headBranch,omitempty"`
+
+	// Services is a list of service names to deploy (optional)
+	// +optional
+	Services []string `json:"services,omitempty"`
+
+	// TTL is the time-to-live duration for the preview environment
+	// +kubebuilder:default="4h"
+	// +optional
+	TTL string `json:"ttl,omitempty"`
 }
 
 // PreviewEnvironmentStatus defines the observed state of PreviewEnvironment.
