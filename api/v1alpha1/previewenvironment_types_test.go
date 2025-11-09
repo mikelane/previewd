@@ -178,4 +178,89 @@ var _ = Describe("PreviewEnvironment", func() {
 			Expect(preview.Spec.Services).To(ContainElements("api", "web", "worker"))
 		})
 	})
+
+	Context("Status fields", func() {
+		It("accepts Phase field", func() {
+			preview := &PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "status-test",
+					Namespace: "default",
+				},
+				Spec: PreviewEnvironmentSpec{
+					Repository: "owner/repo",
+					PRNumber:   123,
+					HeadSHA:    "abc1234567890def1234567890abc1234567890",
+				},
+				Status: PreviewEnvironmentStatus{
+					Phase: "Ready",
+				},
+			}
+
+			Expect(preview.Status.Phase).To(Equal("Ready"))
+		})
+
+		It("accepts URL field", func() {
+			preview := &PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "url-test",
+					Namespace: "default",
+				},
+				Spec: PreviewEnvironmentSpec{
+					Repository: "owner/repo",
+					PRNumber:   123,
+					HeadSHA:    "abc1234567890def1234567890abc1234567890",
+				},
+				Status: PreviewEnvironmentStatus{
+					URL: "https://pr-123.preview.example.com",
+				},
+			}
+
+			Expect(preview.Status.URL).To(Equal("https://pr-123.preview.example.com"))
+		})
+
+		It("accepts Namespace field", func() {
+			preview := &PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "namespace-test",
+					Namespace: "default",
+				},
+				Spec: PreviewEnvironmentSpec{
+					Repository: "owner/repo",
+					PRNumber:   123,
+					HeadSHA:    "abc1234567890def1234567890abc1234567890",
+				},
+				Status: PreviewEnvironmentStatus{
+					Namespace: "preview-pr-123",
+				},
+			}
+
+			Expect(preview.Status.Namespace).To(Equal("preview-pr-123"))
+		})
+
+		It("accepts timestamps", func() {
+			now := metav1.Now()
+			preview := &PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "timestamps-test",
+					Namespace: "default",
+				},
+				Spec: PreviewEnvironmentSpec{
+					Repository: "owner/repo",
+					PRNumber:   123,
+					HeadSHA:    "abc1234567890def1234567890abc1234567890",
+				},
+				Status: PreviewEnvironmentStatus{
+					CreatedAt:          &now,
+					ExpiresAt:          &now,
+					LastSyncedAt:       &now,
+					ObservedGeneration: 1,
+				},
+			}
+
+			Expect(preview.Status.CreatedAt).NotTo(BeNil())
+			Expect(preview.Status.ExpiresAt).NotTo(BeNil())
+			Expect(preview.Status.LastSyncedAt).NotTo(BeNil())
+			Expect(preview.Status.ObservedGeneration).To(Equal(int64(1)))
+		})
+	})
 })

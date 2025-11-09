@@ -81,6 +81,70 @@ type PreviewEnvironmentStatus struct {
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// Phase represents the current phase of the preview environment
+	// Valid values: Pending, Creating, Ready, Updating, Deleting, Failed
+	// +kubebuilder:validation:Enum=Pending;Creating;Ready;Updating;Deleting;Failed
+	// +optional
+	Phase string `json:"phase,omitempty"`
+
+	// URL is the public URL to access the preview environment
+	// +optional
+	URL string `json:"url,omitempty"`
+
+	// Namespace is the Kubernetes namespace created for this preview environment
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+
+	// Services contains status information for deployed services
+	// +optional
+	Services []ServiceStatus `json:"services,omitempty"`
+
+	// CostEstimate provides estimated costs for running this environment
+	// +optional
+	CostEstimate *CostEstimate `json:"costEstimate,omitempty"`
+
+	// CreatedAt is the timestamp when the environment was created
+	// +optional
+	CreatedAt *metav1.Time `json:"createdAt,omitempty"`
+
+	// ExpiresAt is the timestamp when the environment will be automatically deleted
+	// +optional
+	ExpiresAt *metav1.Time `json:"expiresAt,omitempty"`
+
+	// LastSyncedAt is the timestamp of the last successful sync
+	// +optional
+	LastSyncedAt *metav1.Time `json:"lastSyncedAt,omitempty"`
+
+	// ObservedGeneration reflects the generation of the most recently observed spec
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+}
+
+// ServiceStatus represents the status of a deployed service
+type ServiceStatus struct {
+	// Name is the service name
+	Name string `json:"name"`
+
+	// Ready indicates if the service is ready
+	Ready bool `json:"ready"`
+
+	// URL is the service URL (if exposed)
+	// +optional
+	URL string `json:"url,omitempty"`
+}
+
+// CostEstimate provides cost estimation for the preview environment
+type CostEstimate struct {
+	// Currency is the cost currency (e.g., USD)
+	Currency string `json:"currency"`
+
+	// HourlyCost is the estimated hourly cost
+	HourlyCost string `json:"hourlyCost"`
+
+	// TotalCost is the total estimated cost based on TTL
+	// +optional
+	TotalCost string `json:"totalCost,omitempty"`
 }
 
 // +kubebuilder:object:root=true
