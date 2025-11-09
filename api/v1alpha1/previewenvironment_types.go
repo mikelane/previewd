@@ -149,6 +149,11 @@ type CostEstimate struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="PR",type="integer",JSONPath=".spec.prNumber",description="Pull Request Number"
+// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase",description="Current Phase"
+// +kubebuilder:printcolumn:name="URL",type="string",JSONPath=".status.url",description="Preview URL"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Creation Time"
+// +kubebuilder:resource:shortName=preview;previews
 
 // PreviewEnvironment is the Schema for the previewenvironments API
 type PreviewEnvironment struct {
