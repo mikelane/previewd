@@ -98,6 +98,13 @@ linters:
           - gocyclo
           - gosec
           - goconst
+          - revive
+        text: "dot-imports"
+      # Exclude test utility files from dot-imports rule
+      - path: test/utils/
+        linters:
+          - revive
+        text: "dot-imports"
       # Exclude generated files
       - path: zz_generated\.deepcopy\.go
         linters:
