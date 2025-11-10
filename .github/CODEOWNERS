@@ -1,0 +1,37 @@
+# CODEOWNERS file for Previewd
+# Documentation: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repository
+* @mikelane
+
+# API definitions (critical - require careful review)
+/api/ @mikelane
+
+# Controllers (core operator logic)
+/controllers/ @mikelane
+
+# Internal packages
+/internal/ @mikelane
+
+# CI/CD configuration
+/.github/ @mikelane
+
+# Documentation
+/docs/ @mikelane
+*.md @mikelane
+
+# Configuration files
+/config/ @mikelane
+*.yml @mikelane
+*.yaml @mikelane
+
+# Go module files
+go.mod @mikelane
+go.sum @mikelane
+
+# Makefile
+Makefile @mikelane
+
+# Docker
+Dockerfile @mikelane
+.dockerignore @mikelane
