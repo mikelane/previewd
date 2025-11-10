@@ -19,6 +19,7 @@ package utils
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -36,21 +37,31 @@ const (
 )
 
 func warnError(err error) {
-	_, _ = fmt.Fprintf(GinkgoWriter, "warning: %v\n", err)
+	if _, writeErr := fmt.Fprintf(GinkgoWriter, "warning: %v\n", err); writeErr != nil {
+		// If we can't write to GinkgoWriter, there's not much we can do
+		return
+	}
 }
 
 // Run executes the provided command within this context
 func Run(cmd *exec.Cmd) (string, error) {
-	dir, _ := GetProjectDir()
+	dir, err := GetProjectDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get project directory: %w", err)
+	}
 	cmd.Dir = dir
 
-	if err := os.Chdir(cmd.Dir); err != nil {
-		_, _ = fmt.Fprintf(GinkgoWriter, "chdir dir: %q\n", err)
+	if chdirErr := os.Chdir(cmd.Dir); chdirErr != nil {
+		if _, writeErr := fmt.Fprintf(GinkgoWriter, "chdir dir: %q\n", chdirErr); writeErr != nil {
+			return "", fmt.Errorf("failed to change directory and write error: %w", chdirErr)
+		}
 	}
 
 	cmd.Env = append(os.Environ(), "GO111MODULE=on")
 	command := strings.Join(cmd.Args, " ")
-	_, _ = fmt.Fprintf(GinkgoWriter, "running: %q\n", command)
+	if _, writeErr := fmt.Fprintf(GinkgoWriter, "running: %q\n", command); writeErr != nil {
+		return "", fmt.Errorf("failed to write command to GinkgoWriter: %w", writeErr)
+	}
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return string(output), fmt.Errorf("%q failed with error %q: %w", command, string(output), err)
@@ -62,7 +73,8 @@ func Run(cmd *exec.Cmd) (string, error) {
 // UninstallCertManager uninstalls the cert manager
 func UninstallCertManager() {
 	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
-	cmd := exec.Command("kubectl", "delete", "-f", url)
+	// #nosec G204 -- test utility with controlled kubectl command
+	cmd := exec.CommandContext(context.Background(), "kubectl", "delete", "-f", url)
 	if _, err := Run(cmd); err != nil {
 		warnError(err)
 	}
@@ -73,7 +85,8 @@ func UninstallCertManager() {
 		"cert-manager-controller",
 	}
 	for _, lease := range kubeSystemLeases {
-		cmd = exec.Command("kubectl", "delete", "lease", lease,
+		// #nosec G204 -- test utility with controlled kubectl command
+		cmd = exec.CommandContext(context.Background(), "kubectl", "delete", "lease", lease,
 			"-n", "kube-system", "--ignore-not-found", "--force", "--grace-period=0")
 		if _, err := Run(cmd); err != nil {
 			warnError(err)
@@ -84,13 +97,14 @@ func UninstallCertManager() {
 // InstallCertManager installs the cert manager bundle.
 func InstallCertManager() error {
 	url := fmt.Sprintf(certmanagerURLTmpl, certmanagerVersion)
-	cmd := exec.Command("kubectl", "apply", "-f", url)
+	// #nosec G204 -- test utility with controlled kubectl command
+	cmd := exec.CommandContext(context.Background(), "kubectl", "apply", "-f", url)
 	if _, err := Run(cmd); err != nil {
 		return err
 	}
 	// Wait for cert-manager-webhook to be ready, which can take time if cert-manager
 	// was re-installed after uninstalling on a cluster.
-	cmd = exec.Command("kubectl", "wait", "deployment.apps/cert-manager-webhook",
+	cmd = exec.CommandContext(context.Background(), "kubectl", "wait", "deployment.apps/cert-manager-webhook",
 		"--for", "condition=Available",
 		"--namespace", "cert-manager",
 		"--timeout", "5m",
@@ -114,7 +128,7 @@ func IsCertManagerCRDsInstalled() bool {
 	}
 
 	// Execute the kubectl command to get all CRDs
-	cmd := exec.Command("kubectl", "get", "crds")
+	cmd := exec.CommandContext(context.Background(), "kubectl", "get", "crds")
 	output, err := Run(cmd)
 	if err != nil {
 		return false
@@ -144,7 +158,8 @@ func LoadImageToKindClusterWithName(name string) error {
 	if v, ok := os.LookupEnv("KIND"); ok {
 		kindBinary = v
 	}
-	cmd := exec.Command(kindBinary, kindOptions...)
+	// #nosec G204 -- test utility with controlled kind command from environment
+	cmd := exec.CommandContext(context.Background(), kindBinary, kindOptions...)
 	_, err := Run(cmd)
 	return err
 }
