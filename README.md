@@ -304,14 +304,38 @@ See [ROADMAP.md](ROADMAP.md) for detailed timeline and milestones.
 
 ## Contributing
 
-Contributions are welcome! This project follows strict engineering practices:
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for complete guidelines.
 
-- ✅ **Test-Driven Development** - Tests before implementation
-- ✅ **Clean Code** - Readable, maintainable, well-documented
+**Quick start for contributors:**
+
+### Code Owners (@mikelane)
+Code owners can develop directly from clones:
+```bash
+git clone git@github.com:mikelane/previewd.git
+cd previewd
+git checkout -b feat/your-feature
+# Make changes, then push and create PR
+```
+
+### External Contributors
+External contributors must use fork-based workflow:
+```bash
+# Fork on GitHub first, then:
+git clone git@github.com:YOUR-USERNAME/previewd.git
+cd previewd
+git remote add upstream git@github.com:mikelane/previewd.git
+git checkout -b feat/your-feature
+# Make changes, push to your fork, then create PR from fork
+```
+
+**Development standards:**
+- ✅ **Test-Driven Development** - Write tests first, watch fail, make pass
+- ✅ **100% Coverage Required** - All new code must be fully tested
+- ✅ **Issue-Based Development** - Every change requires a GitHub issue
+- ✅ **Documentation Updates Mandatory** - Update docs in same PR as code
 - ✅ **Conventional Commits** - Structured commit messages
-- ✅ **GitHub Flow** - Feature branches, pull requests, code review
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for complete workflow, testing requirements, and quality standards.
 
 ## License
 
