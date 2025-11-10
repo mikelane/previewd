@@ -8,6 +8,8 @@ jobs:
   test:
     name: Run on Ubuntu
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # Required for OIDC authentication with Codecov
     steps:
       - name: Clone the code
         uses: actions/checkout@v4
@@ -17,7 +19,16 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Running Tests
+      - name: Running Tests with Coverage
         run: |
           go mod tidy
-          make test
+          make cover
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7  # v5.5.1
+        with:
+          use_oidc: true  # Use OIDC authentication instead of token
+          files: ./coverage.out
+          flags: go
+          name: previewd
+          fail_ci_if_error: true  # ENFORCE: Fail CI if coverage upload fails

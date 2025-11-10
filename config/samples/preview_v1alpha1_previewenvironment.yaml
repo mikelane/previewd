@@ -6,4 +6,13 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: previewenvironment-sample
 spec:
-  # TODO(user): Add fields here
+  repository: mikelane/previewd
+  prNumber: 123
+  headSHA: 1234567890abcdef1234567890abcdef12345678
+  baseBranch: main
+  headBranch: feature/test
+  ttl: "4h"
+  services:
+    - api
+    - web
+    - worker
