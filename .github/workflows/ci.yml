@@ -346,7 +346,10 @@ jobs:
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}
         run: |
-          make build
+          # Generate manifests and code first (native build)
+          make manifests generate fmt vet
+          # Then build the binary with cross-compilation
+          go build -o bin/manager-${{ matrix.os }}-${{ matrix.arch }} cmd/main.go
           ls -lh bin/
 
   # Docker build verification
