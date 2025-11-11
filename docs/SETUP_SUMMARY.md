@@ -152,7 +152,7 @@ A world-class GitHub-native product lifecycle management system has been establi
 
 ### 3. GitHub Project Board
 
-**Project:** [Previewd Development](https://github.com/users/mikelane/projects/3)
+**Project:** [Previewd Development](https://github.com/mikelane/previewd/issues)
 
 **Custom Fields:**
 - **Priority** (Single Select): P0 - Critical, P1 - High, P2 - Medium, P3 - Low
@@ -364,7 +364,7 @@ Some configuration requires manual setup via GitHub UI:
 
 To create custom views:
 
-1. Go to https://github.com/users/mikelane/projects/3
+1. Go to https://github.com/mikelane/previewd/issues
 2. Click "New view" dropdown
 3. Create:
    - **Board view**: Group by "Workflow Stage"
@@ -432,7 +432,7 @@ To enforce quality gates:
 
 ## Resources
 
-- **Project Board**: https://github.com/users/mikelane/projects/3
+- **Project Board**: https://github.com/mikelane/previewd/issues
 - **Milestones**: https://github.com/mikelane/previewd/milestones
 - **Issues**: https://github.com/mikelane/previewd/issues
 - **Contributing Guide**: [CONTRIBUTING.md](../CONTRIBUTING.md)

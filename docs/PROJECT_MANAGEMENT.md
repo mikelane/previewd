@@ -6,7 +6,7 @@ This document describes the GitHub project management structure for Previewd, in
 
 ## Project Board Structure
 
-**Project**: [Previewd Development](https://github.com/users/mikelane/projects/3)
+**Project**: [Previewd Development](https://github.com/mikelane/previewd/issues)
 
 ### Status Field (Workflow Columns)
 
@@ -374,7 +374,7 @@ gh issue edit <number> --milestone "v0.1.0: Core Operator (No AI)"
 - [GitHub Projects v2 Documentation](https://docs.github.com/en/issues/planning-and-tracking-with-projects)
 - [GitHub Issues Documentation](https://docs.github.com/en/issues)
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
-- [Project Board](https://github.com/users/mikelane/projects/3)
+- [Project Board](https://github.com/mikelane/previewd/issues)
 - [Repository Issues](https://github.com/mikelane/previewd/issues)
 - [CONTRIBUTING.md](/CONTRIBUTING.md) - Contribution workflow
 - [CLAUDE.md](/CLAUDE.md) - Development workflow requirements
@@ -384,4 +384,4 @@ gh issue edit <number> --milestone "v0.1.0: Core Operator (No AI)"
 For questions or issues with project management:
 - **Maintainer**: Mike Lane (@mikelane)
 - **Email**: mikelane@gmail.com
-- **Project Board**: https://github.com/users/mikelane/projects/3
+- **Project Board**: https://github.com/mikelane/previewd/issues

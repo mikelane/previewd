@@ -404,7 +404,7 @@ gh issue list --label "status: in-progress" --json number,title,updatedAt --jq '
 
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - Full workflow documentation
 - [PRODUCT_LIFECYCLE.md](PRODUCT_LIFECYCLE.md) - Detailed lifecycle
-- [GitHub Project Board](https://github.com/users/mikelane/projects/3) - Live tracking
+- [GitHub Project Board](https://github.com/mikelane/previewd/issues) - Live tracking
 - [Milestones](https://github.com/mikelane/previewd/milestones) - Release planning
 
 ---

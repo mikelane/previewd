@@ -51,7 +51,7 @@ make install
 make run
 ```
 
-For detailed development setup, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+For detailed development setup and workflow guides, see the `docs/` directory.
 
 ## Development Workflow
 
@@ -406,7 +406,7 @@ Contributors are recognized in:
 
 ## Project Board
 
-Track project progress on our [GitHub Project Board](https://github.com/users/mikelane/projects/3).
+Track project progress on our GitHub Issues and Projects boards.
 
 The board has multiple views:
 
@@ -422,4 +422,4 @@ By contributing, you agree that your contributions will be licensed under the MI
 
 **Thank you for contributing to Previewd!** Your contributions help make Kubernetes preview environments better for everyone.
 
-For questions, reach out to [@mikelane](https://github.com/mikelane) or start a [Discussion](https://github.com/mikelane/previewd/discussions).
+For questions, reach out to [@mikelane](https://github.com/mikelane) or open an issue.

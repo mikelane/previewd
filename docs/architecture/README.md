@@ -461,7 +461,7 @@ curl -s 'http://prometheus:9090/api/v1/query?query=sum(previewd_environment_cost
 - GitHub: [@mikelane](https://github.com/mikelane)
 - Email: mikelane@gmail.com
 
-**Questions?** Open a GitHub Discussion in the [Previewd repository](https://github.com/mikelane/previewd/discussions)
+**Questions?** Open an issue in the [Previewd repository](https://github.com/mikelane/previewd/issues)
 
 ---
 

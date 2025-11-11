@@ -574,9 +574,9 @@ Some processes require manual intervention (for now):
 
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - Contribution guidelines
 - [CLAUDE.md](../CLAUDE.md) - Project context and workflow
-- [GitHub Project Board](https://github.com/users/mikelane/projects/3) - Live project tracking
+- [GitHub Issues](https://github.com/mikelane/previewd/issues) - Issue tracking
 - [Milestones](https://github.com/mikelane/previewd/milestones) - Release planning
 
 ---
 
-**Questions?** Open a [Discussion](https://github.com/mikelane/previewd/discussions) or contact [@mikelane](https://github.com/mikelane).
+**Questions?** Open an issue or contact [@mikelane](https://github.com/mikelane).
