@@ -1,0 +1,146 @@
+name: Project Board Automation
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, review_requested, closed]
+  pull_request_review:
+    types: [submitted]
+  issues:
+    types: [opened, closed, assigned]
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  update-project:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add issue/PR to project
+        if: github.event.action == 'opened'
+        uses: actions/add-to-project@v1.0.2
+        with:
+          project-url: https://github.com/users/mikelane/projects/3
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Move to Code Review when PR opened
+        if: github.event_name == 'pull_request' && github.event.action == 'opened'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+
+            // Add workflow label
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              labels: ['workflow: ready-for-review']
+            });
+
+            // Comment on PR with workflow instructions
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              body: `## 🤖 Workflow Automation
+
+This PR has been moved to **Code Review** stage on the project board.
+
+**Next Steps:**
+1. ✅ Automated checks must pass
+2. 👀 Code review approval required
+3. 🧪 QA review required
+4. 🚀 SRE review (if infrastructure changes)
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md#pull-request-process) for details.`
+            });
+
+      - name: Move to QA Review when code approved
+        if: |
+          github.event_name == 'pull_request_review' &&
+          github.event.review.state == 'approved'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+
+            // Remove code review label, add QA review label
+            await github.rest.issues.removeLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              name: 'workflow: ready-for-review'
+            }).catch(() => {});
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              labels: ['workflow: needs-qa']
+            });
+
+            // Comment on PR
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              body: `## ✅ Code Review Approved
+
+Moving to **QA Review** stage.
+
+@mikelane - Please perform QA validation:
+- Run full test suite
+- Security audit
+- Validate acceptance criteria
+- Test edge cases
+
+See [PRODUCT_LIFECYCLE.md](../docs/PRODUCT_LIFECYCLE.md#6-qa-review) for QA checklist.`
+            });
+
+      - name: Auto-close linked issues when PR merged
+        if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+
+            // Extract issue numbers from PR body
+            const issueNumbers = (pr.body || '').match(/(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi);
+
+            if (issueNumbers) {
+              for (const match of issueNumbers) {
+                const issueNumber = parseInt(match.match(/\d+/)[0]);
+
+                // Close the issue
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  state: 'closed'
+                });
+
+                // Add comment
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  body: `Automatically closed by merged PR #${pr.number}`
+                });
+              }
+            }
+
+      - name: Auto-assign based on CODEOWNERS
+        if: github.event_name == 'pull_request' && github.event.action == 'opened'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // For now, auto-assign to mikelane
+            // TODO: Parse CODEOWNERS file when more contributors
+            await github.rest.pulls.requestReviewers({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              reviewers: ['mikelane']
+            });

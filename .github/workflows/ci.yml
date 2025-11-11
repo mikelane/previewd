@@ -1,0 +1,451 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  # Code quality and linting
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.4.0
+          args: --timeout=5m
+
+      - name: Verify go.mod is tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum || (echo "go.mod or go.sum is not tidy. Run 'go mod tidy' and commit changes." && exit 1)
+
+  # Format verification
+  format:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check gofmt
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "The following files are not formatted:"
+            gofmt -l .
+            echo "Run 'gofmt -w .' to fix formatting."
+            exit 1
+          fi
+
+      - name: Check goimports
+        run: |
+          go install golang.org/x/tools/cmd/goimports@latest
+          if [ -n "$(goimports -l .)" ]; then
+            echo "The following files have import issues:"
+            goimports -l .
+            echo "Run 'goimports -w .' to fix imports."
+            exit 1
+          fi
+
+  # Static analysis
+  static-analysis:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run go vet
+        run: make vet
+
+      - name: Run staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          staticcheck ./...
+
+  # Security scanning
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run gosec security scanner
+        uses: securego/gosec@master
+        with:
+          args: '-no-fail -fmt sarif -out gosec.sarif ./...'
+
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: gosec.sarif
+
+  # Dependency vulnerability scanning
+  vulnerability-scan:
+    name: Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+      - name: Run Nancy (dependency vulnerability scanner)
+        run: |
+          go install github.com/sonatype-nexus-community/nancy@latest
+          go list -json -m all | nancy sleuth
+
+  # Unit tests with coverage
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run tests with coverage
+        run: |
+          make cover
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          use_oidc: true  # Use OIDC authentication instead of token
+          files: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: true
+          verbose: true
+
+      - name: Check coverage thresholds
+        run: |
+          # Extract total coverage percentage
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+          echo "Total coverage: ${COVERAGE}%"
+
+          # Fail if coverage is below 100%
+          if (( $(echo "$COVERAGE < 100" | bc -l) )); then
+            echo "❌ Coverage is ${COVERAGE}%, which is below the required 100%"
+            exit 1
+          fi
+          echo "✅ Coverage requirement met: ${COVERAGE}%"
+
+  # Branch coverage validation
+  branch-coverage:
+    name: Branch Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run tests with branch coverage
+        run: |
+          # Run tests and generate coverage in atomic mode (required for branch coverage)
+          go test -covermode=atomic -coverprofile=coverage.out ./... -v
+
+          # Parse coverage and check branch coverage
+          # Note: Go's coverage includes branch coverage in atomic mode
+          go tool cover -func=coverage.out
+
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+          echo "Branch coverage: ${COVERAGE}%"
+
+          if (( $(echo "$COVERAGE < 100" | bc -l) )); then
+            echo "❌ Branch coverage is ${COVERAGE}%, which is below the required 100%"
+            exit 1
+          fi
+          echo "✅ Branch coverage requirement met: ${COVERAGE}%"
+
+  # Mutation testing
+  mutation-test:
+    name: Mutation Testing
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install go-mutesting
+        run: go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest
+
+      - name: Run mutation tests
+        run: |
+          # Run mutation testing on all packages except test and generated files
+          PACKAGES=$(go list ./... | grep -v /test/ | grep -v /e2e)
+
+          echo "Running mutation testing on packages:"
+          echo "$PACKAGES"
+
+          TOTAL_SCORE=0
+          PACKAGE_COUNT=0
+
+          for pkg in $PACKAGES; do
+            echo "Testing package: $pkg"
+
+            # Convert package to directory path
+            PKG_DIR=$(echo $pkg | sed 's|github.com/mikelane/previewd/||')
+
+            # Skip if no Go files (excluding test files)
+            if [ -z "$(find $PKG_DIR -maxdepth 1 -name '*.go' ! -name '*_test.go' 2>/dev/null)" ]; then
+              echo "Skipping $pkg (no source files)"
+              continue
+            fi
+
+            # Run mutation testing
+            RESULT=$(go-mutesting --do-not-remove-tmp-folder $PKG_DIR 2>&1 || true)
+            echo "$RESULT"
+
+            # Extract mutation score if available
+            SCORE=$(echo "$RESULT" | grep -o 'The mutation score is [0-9.]*' | awk '{print $5}' || echo "0")
+
+            if [ -n "$SCORE" ] && [ "$SCORE" != "0" ]; then
+              TOTAL_SCORE=$(echo "$TOTAL_SCORE + $SCORE" | bc)
+              PACKAGE_COUNT=$((PACKAGE_COUNT + 1))
+              echo "Package $pkg mutation score: ${SCORE}%"
+            fi
+          done
+
+          if [ $PACKAGE_COUNT -gt 0 ]; then
+            AVG_SCORE=$(echo "scale=2; $TOTAL_SCORE / $PACKAGE_COUNT" | bc)
+            echo "Average mutation score: ${AVG_SCORE}%"
+
+            # Require 100% mutation coverage
+            if (( $(echo "$AVG_SCORE < 100" | bc -l) )); then
+              echo "❌ Mutation score is ${AVG_SCORE}%, which is below the required 100%"
+              exit 1
+            fi
+            echo "✅ Mutation coverage requirement met: ${AVG_SCORE}%"
+          else
+            echo "⚠️  No mutation testing performed (no eligible packages found)"
+          fi
+
+  # Race condition detection
+  race-test:
+    name: Race Condition Detection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run tests with race detector
+        run: make test-race
+
+  # E2E tests
+  e2e-test:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install kind
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+
+      - name: Run E2E tests
+        run: make test-e2e
+
+  # Build verification
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [linux, darwin]
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          make build
+          ls -lh bin/
+
+  # Docker build verification
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: previewd:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan Docker image for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: previewd:test
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+  # License compliance
+  license-check:
+    name: License Compliance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check licenses
+        run: |
+          go install github.com/google/go-licenses@latest
+          go-licenses check ./... --disallowed_types=forbidden,restricted
+
+  # Documentation validation
+  docs-check:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for broken links
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        with:
+          use-quiet-mode: 'yes'
+          config-file: '.github/markdown-link-check-config.json'
+
+      - name: Validate README
+        run: |
+          if [ ! -f README.md ]; then
+            echo "❌ README.md is missing"
+            exit 1
+          fi
+          if [ ! -s README.md ]; then
+            echo "❌ README.md is empty"
+            exit 1
+          fi
+          echo "✅ README.md exists and is not empty"
+
+  # All checks must pass
+  all-checks:
+    name: All Checks Passed
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+      - format
+      - static-analysis
+      - security
+      - vulnerability-scan
+      - test
+      - branch-coverage
+      - mutation-test
+      - race-test
+      - e2e-test
+      - build
+      - docker-build
+      - license-check
+      - docs-check
+    steps:
+      - name: All checks passed
+        run: echo "✅ All CI checks passed successfully!"

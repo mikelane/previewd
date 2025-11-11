@@ -1,0 +1,97 @@
+name: Spike / Research
+description: Time-boxed investigation or research task
+title: "[Spike]: "
+labels: ["type: spike", "status: triage"]
+assignees:
+  - mikelane
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a spike! Spikes are time-boxed research or investigation tasks designed to reduce uncertainty and inform decisions.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Research Question
+      description: What question are we trying to answer?
+      placeholder: "Can we integrate with service X? What is the performance impact of approach Y?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why do we need to answer this question? What decision depends on it?
+      placeholder: |
+        We need to decide between approach A and B for epic #123.
+        This will impact the architecture of...
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria / Deliverables
+      description: What specific outputs or deliverables are expected from this spike?
+      placeholder: |
+        - [ ] Proof of concept implementation
+        - [ ] Performance benchmarks (with data)
+        - [ ] Recommendation document with pros/cons
+        - [ ] Updated ADR if architectural decision made
+    validations:
+      required: true
+
+  - type: input
+    id: timebox
+    attributes:
+      label: Time Box
+      description: Maximum time to spend on this spike (enforces time-boxing)
+      placeholder: "4 hours" or "1 day"
+    validations:
+      required: true
+
+  - type: textarea
+    id: approach
+    attributes:
+      label: Research Approach
+      description: How will you investigate this question?
+      placeholder: |
+        1. Review documentation for service X
+        2. Create minimal proof of concept
+        3. Run performance benchmarks
+        4. Document findings
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this research?
+      options:
+        - P0 - Critical (blocks current work)
+        - P1 - High (blocks upcoming work)
+        - P2 - Medium (informational)
+        - P3 - Low (nice to know)
+    validations:
+      required: true
+
+  - type: textarea
+    id: related-issues
+    attributes:
+      label: Related Issues
+      description: Which epics or issues depend on this spike?
+      placeholder: |
+        - Epic #123
+        - Issue #456
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other context, links to docs, prior art, etc.

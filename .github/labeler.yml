@@ -1,0 +1,42 @@
+# Auto-label PRs based on file paths
+
+'area: ai':
+  - 'internal/ai/**/*'
+  - 'pkg/ai/**/*'
+
+'area: argocd':
+  - 'internal/argocd/**/*'
+  - 'pkg/argocd/**/*'
+
+'area: cost':
+  - 'internal/cost/**/*'
+  - 'pkg/cost/**/*'
+
+'area: github':
+  - 'internal/github/**/*'
+  - 'pkg/github/**/*'
+
+'area: kubernetes':
+  - 'api/**/*'
+  - 'controllers/**/*'
+  - 'config/**/*'
+
+'area: observability':
+  - 'internal/observability/**/*'
+  - 'pkg/observability/**/*'
+
+'area: security':
+  - 'internal/security/**/*'
+  - 'pkg/security/**/*'
+
+'documentation':
+  - '**/*.md'
+  - 'docs/**/*'
+  - 'examples/**/*'
+
+'type: task':
+  - '.github/**/*'
+  - 'Makefile'
+  - 'Dockerfile'
+  - '**/*_test.go'
+  - 'hack/**/*'
