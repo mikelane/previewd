@@ -376,8 +376,8 @@ gh issue edit <number> --milestone "v0.1.0: Core Operator (No AI)"
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
 - [Project Board](https://github.com/mikelane/previewd/issues)
 - [Repository Issues](https://github.com/mikelane/previewd/issues)
-- [CONTRIBUTING.md](/CONTRIBUTING.md) - Contribution workflow
-- [CLAUDE.md](/CLAUDE.md) - Development workflow requirements
+- [CONTRIBUTING.md](../CONTRIBUTING.md) - Contribution workflow
+- [CLAUDE.md](../CLAUDE.md) - Development workflow requirements
 
 ## Contact
 
