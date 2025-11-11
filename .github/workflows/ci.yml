@@ -327,10 +327,6 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        os: [linux, darwin]
-        arch: [amd64, arm64]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -342,14 +338,8 @@ jobs:
           cache: true
 
       - name: Build binary
-        env:
-          GOOS: ${{ matrix.os }}
-          GOARCH: ${{ matrix.arch }}
         run: |
-          # Generate manifests and code first (native build)
-          make manifests generate fmt vet
-          # Then build the binary with cross-compilation
-          go build -o bin/manager-${{ matrix.os }}-${{ matrix.arch }} cmd/main.go
+          make build
           ls -lh bin/
 
   # Docker build verification
