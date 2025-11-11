@@ -165,7 +165,7 @@ kubectl apply -f config/samples/preview-environment.yaml
 
 ## Development Setup
 
-See [DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed setup instructions.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed setup instructions.
 
 **Quick start:**
 

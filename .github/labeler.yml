@@ -1,0 +1,61 @@
+# Auto-label PRs based on file paths
+# Format for actions/labeler@v5
+
+'area: ai':
+  - changed-files:
+    - any-glob-to-any-file: 'internal/ai/**/*'
+  - changed-files:
+    - any-glob-to-any-file: 'pkg/ai/**/*'
+
+'area: argocd':
+  - changed-files:
+    - any-glob-to-any-file: 'internal/argocd/**/*'
+  - changed-files:
+    - any-glob-to-any-file: 'pkg/argocd/**/*'
+
+'area: cost':
+  - changed-files:
+    - any-glob-to-any-file: 'internal/cost/**/*'
+  - changed-files:
+    - any-glob-to-any-file: 'pkg/cost/**/*'
+
+'area: github':
+  - changed-files:
+    - any-glob-to-any-file: 'internal/github/**/*'
+  - changed-files:
+    - any-glob-to-any-file: 'pkg/github/**/*'
+
+'area: kubernetes':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'api/**/*'
+      - 'controllers/**/*'
+      - 'config/**/*'
+
+'area: observability':
+  - changed-files:
+    - any-glob-to-any-file: 'internal/observability/**/*'
+  - changed-files:
+    - any-glob-to-any-file: 'pkg/observability/**/*'
+
+'area: security':
+  - changed-files:
+    - any-glob-to-any-file: 'internal/security/**/*'
+  - changed-files:
+    - any-glob-to-any-file: 'pkg/security/**/*'
+
+'documentation':
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/*.md'
+      - 'docs/**/*'
+      - 'examples/**/*'
+
+'type: task':
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.github/**/*'
+      - 'Makefile'
+      - 'Dockerfile'
+      - '**/*_test.go'
+      - 'hack/**/*'

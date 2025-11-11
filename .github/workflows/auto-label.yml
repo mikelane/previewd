@@ -1,0 +1,85 @@
+name: Auto Label Issues and PRs
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  auto-label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Label based on file paths
+        uses: actions/labeler@v5
+        if: github.event_name == 'pull_request'
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: .github/labeler.yml
+
+      - name: Label PR size
+        uses: codelytv/pr-size-labeler@v1
+        if: github.event_name == 'pull_request'
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          xs_label: 'size: XS'
+          xs_max_size: '50'
+          s_label: 'size: S'
+          s_max_size: '200'
+          m_label: 'size: M'
+          m_max_size: '500'
+          l_label: 'size: L'
+          l_max_size: '1000'
+          xl_label: 'size: XL'
+          fail_if_xl: 'false'
+
+      - name: Label based on title
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = context.payload.pull_request?.title || context.payload.issue?.title;
+            if (!title) return;
+
+            const labels = [];
+
+            // Determine type from conventional commit prefix
+            if (title.match(/^feat(\(.+\))?:/i)) {
+              labels.push('enhancement');
+            } else if (title.match(/^fix(\(.+\))?:/i)) {
+              labels.push('bug');
+            } else if (title.match(/^docs(\(.+\))?:/i)) {
+              labels.push('documentation');
+            } else if (title.match(/^test(\(.+\))?:/i)) {
+              labels.push('type: task');
+            } else if (title.match(/^refactor(\(.+\))?:/i)) {
+              labels.push('type: task');
+            } else if (title.match(/^\[epic\]/i)) {
+              labels.push('type: epic');
+            } else if (title.match(/^\[spike\]/i)) {
+              labels.push('type: spike');
+            } else if (title.match(/^\[task\]/i)) {
+              labels.push('type: task');
+            }
+
+            // Add triage label for new issues
+            if (context.eventName === 'issues' && context.payload.action === 'opened') {
+              labels.push('status: triage');
+            }
+
+            if (labels.length > 0) {
+              const issueNumber = context.payload.pull_request?.number || context.payload.issue?.number;
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                labels: labels
+              });
+            }

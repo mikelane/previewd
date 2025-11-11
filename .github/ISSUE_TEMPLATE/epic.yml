@@ -1,0 +1,150 @@
+name: Epic
+description: Large initiative spanning multiple issues and milestones
+title: "[Epic]: "
+labels: ["type: epic", "status: triage"]
+assignees:
+  - mikelane
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a new epic! Epics are large initiatives that span multiple issues and potentially multiple milestones.
+
+  - type: textarea
+    id: vision
+    attributes:
+      label: Vision
+      description: What is the high-level goal or vision for this epic?
+      placeholder: "This epic will enable users to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this epic solve? Who experiences this problem?
+      placeholder: |
+        Currently, users cannot...
+        This affects [user persona] when they...
+    validations:
+      required: true
+
+  - type: textarea
+    id: success-criteria
+    attributes:
+      label: Success Criteria
+      description: How will we know when this epic is complete? What metrics will we use?
+      placeholder: |
+        - [ ] Users can successfully...
+        - [ ] Performance improves by X%
+        - [ ] Documentation is complete
+        - [ ] 90% test coverage
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is in scope and out of scope for this epic?
+      placeholder: |
+        **In Scope:**
+        - Feature A
+        - Feature B
+
+        **Out of Scope:**
+        - Feature C (deferred to future)
+        - Feature D (different epic)
+    validations:
+      required: true
+
+  - type: textarea
+    id: user-stories
+    attributes:
+      label: User Stories (Initial)
+      description: List the initial user stories or issues that make up this epic. These can be refined later.
+      placeholder: |
+        - As a [role], I want [feature] so that [benefit]
+        - As a [role], I want [feature] so that [benefit]
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this epic?
+      options:
+        - P0 - Critical (must have for launch)
+        - P1 - High (important for success)
+        - P2 - Medium (nice to have)
+        - P3 - Low (future enhancement)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Target Phase
+      description: Which release/phase should this epic target?
+      options:
+        - v0.1.0 - Core Operator
+        - v0.2.0 - AI Integration
+        - v0.3.0 - Production Polish
+        - Future
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical-approach
+    attributes:
+      label: Technical Approach (High-Level)
+      description: What is the high-level technical approach? Architecture changes needed?
+      placeholder: |
+        - New package: internal/feature
+        - Integration with external API
+        - Database schema changes
+    validations:
+      required: false
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: What other epics or issues must be completed first?
+      placeholder: |
+        - Epic #123 must be complete
+        - External dependency on service X
+    validations:
+      required: false
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks and Mitigation
+      description: What are the risks and how will we mitigate them?
+      placeholder: |
+        **Risk:** Performance degradation
+        **Mitigation:** Load testing before release
+
+        **Risk:** Breaking change for existing users
+        **Mitigation:** Feature flag + migration guide
+    validations:
+      required: false
+
+  - type: input
+    id: estimated-effort
+    attributes:
+      label: Estimated Effort
+      description: Rough estimate in person-weeks (considering AI assistance)
+      placeholder: "2-3 weeks"
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other context, diagrams, mockups, or references

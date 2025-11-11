@@ -1,0 +1,134 @@
+name: Task
+description: Technical task or chore without direct user-facing value
+title: "[Task]: "
+labels: ["type: task", "status: triage"]
+assignees:
+  - mikelane
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for creating a task! Tasks are technical work items that don't have direct user-facing value but are necessary for the health of the project.
+
+  - type: dropdown
+    id: task-type
+    attributes:
+      label: Task Type
+      description: What type of task is this?
+      options:
+        - Refactoring
+        - Technical Debt
+        - CI/CD
+        - Testing
+        - Documentation (internal)
+        - Dependency Update
+        - Tooling
+        - Infrastructure
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What needs to be done?
+      placeholder: Refactor the reconciliation loop to improve testability...
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why does this task need to be done? What problem does it solve?
+      placeholder: |
+        Current code is difficult to test due to...
+        This will enable us to...
+        Without this, we risk...
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: How will we know when this task is complete?
+      placeholder: |
+        - [ ] Code refactored with clear separation of concerns
+        - [ ] Tests still pass (or improved test coverage)
+        - [ ] Documentation updated
+        - [ ] No functional changes (behavior preserved)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this task?
+      options:
+        - P0 - Critical (blocks other work)
+        - P1 - High (should do soon)
+        - P2 - Medium (nice to have)
+        - P3 - Low (eventually)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: size
+    attributes:
+      label: Estimated Size
+      description: How much work is this task?
+      options:
+        - XS - 1-2 hours
+        - S - Half day (2-4 hours)
+        - M - 1-2 days
+        - L - 3-5 days
+        - XL - 1-2 weeks (consider breaking down)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Target Phase
+      description: Which release/phase should this task target?
+      options:
+        - v0.1.0 - Core Operator
+        - v0.2.0 - AI Integration
+        - v0.3.0 - Production Polish
+        - Future
+        - No specific phase (can be done anytime)
+    validations:
+      required: true
+
+  - type: textarea
+    id: related-issues
+    attributes:
+      label: Related Issues
+      description: Is this task related to any epics or other issues?
+      placeholder: |
+        - Part of Epic #123
+        - Blocks Issue #456
+    validations:
+      required: false
+
+  - type: textarea
+    id: technical-notes
+    attributes:
+      label: Technical Notes
+      description: Any technical details, approach, or considerations?
+      placeholder: |
+        - Files to change: controllers/previewenvironment_controller.go
+        - Pattern to apply: Extract interface for X
+        - References: Clean Code chapter 3
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other context, links, or information
