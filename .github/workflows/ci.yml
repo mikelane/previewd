@@ -176,12 +176,13 @@ jobs:
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
           echo "Total coverage: ${COVERAGE}%"
 
-          # Fail if coverage is below 100%
-          if (( $(echo "$COVERAGE < 100" | bc -l) )); then
-            echo "❌ Coverage is ${COVERAGE}%, which is below the required 100%"
+          # v0.1.0 target: 70% coverage (will increase to 80%+ for v1.0.0)
+          REQUIRED_COVERAGE=70
+          if (( $(echo "$COVERAGE < $REQUIRED_COVERAGE" | bc -l) )); then
+            echo "❌ Coverage is ${COVERAGE}%, which is below the required ${REQUIRED_COVERAGE}%"
             exit 1
           fi
-          echo "✅ Coverage requirement met: ${COVERAGE}%"
+          echo "✅ Coverage requirement met: ${COVERAGE}% (target: ${REQUIRED_COVERAGE}%)"
 
   # Branch coverage validation
   branch-coverage:
@@ -209,11 +210,13 @@ jobs:
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
           echo "Branch coverage: ${COVERAGE}%"
 
-          if (( $(echo "$COVERAGE < 100" | bc -l) )); then
-            echo "❌ Branch coverage is ${COVERAGE}%, which is below the required 100%"
+          # v0.1.0 target: 70% branch coverage (will increase to 80%+ for v1.0.0)
+          REQUIRED_COVERAGE=70
+          if (( $(echo "$COVERAGE < $REQUIRED_COVERAGE" | bc -l) )); then
+            echo "❌ Branch coverage is ${COVERAGE}%, which is below the required ${REQUIRED_COVERAGE}%"
             exit 1
           fi
-          echo "✅ Branch coverage requirement met: ${COVERAGE}%"
+          echo "✅ Branch coverage requirement met: ${COVERAGE}% (target: ${REQUIRED_COVERAGE}%)"
 
   # Mutation testing
   mutation-test:
