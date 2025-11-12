@@ -2,6 +2,8 @@ module github.com/mikelane/previewd
 
 go 1.25
 
+toolchain go1.25.4
+
 require (
 	github.com/onsi/ginkgo/v2 v2.22.0
 	github.com/onsi/gomega v1.36.1

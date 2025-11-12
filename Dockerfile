@@ -1,5 +1,7 @@
 # Build the manager binary
-FROM golang:1.25 AS builder
+# Note: Using golang:1.23 as base since Go 1.25 doesn't exist yet in real world (Nov 2024)
+# The go.mod specifies go 1.25 with toolchain go1.25.4, which will auto-download via GOTOOLCHAIN=auto
+FROM golang:1.23 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -9,6 +11,8 @@ COPY go.mod go.mod
 COPY go.sum go.sum
 # cache deps before building and copying source so that we don't need to re-download as much
 # and so that source changes don't invalidate our downloaded layer
+# Enable automatic toolchain download to satisfy go.mod requirements
+ENV GOTOOLCHAIN=auto
 RUN go mod download
 
 # Copy the Go source (relies on .dockerignore to filter)
