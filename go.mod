@@ -1,6 +1,6 @@
 module github.com/mikelane/previewd
 
-go 1.25
+go 1.24.9
 
 require (
 	github.com/onsi/ginkgo/v2 v2.22.0
