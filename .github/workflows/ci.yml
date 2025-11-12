@@ -241,8 +241,8 @@ jobs:
 
       - name: Run tests with branch coverage
         run: |
-          # Run tests and generate coverage in atomic mode (required for branch coverage)
-          go test -covermode=atomic -coverprofile=coverage.out ./... -v
+          # Use Makefile to ensure envtest binaries are set up correctly
+          make cover
 
           # Parse coverage and check branch coverage
           # Note: Go's coverage includes branch coverage in atomic mode
