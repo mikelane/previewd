@@ -25,7 +25,7 @@ import (
 	"os/exec"
 	"strings"
 
-	. "github.com/onsi/ginkgo/v2" // nolint:revive,staticcheck
+	"github.com/onsi/ginkgo/v2"
 )
 
 const (
@@ -37,7 +37,7 @@ const (
 )
 
 func warnError(err error) {
-	if _, writeErr := fmt.Fprintf(GinkgoWriter, "warning: %v\n", err); writeErr != nil {
+	if _, writeErr := fmt.Fprintf(ginkgo.GinkgoWriter, "warning: %v\n", err); writeErr != nil {
 		// If we can't write to GinkgoWriter, there's not much we can do
 		return
 	}
@@ -52,14 +52,14 @@ func Run(cmd *exec.Cmd) (string, error) {
 	cmd.Dir = dir
 
 	if chdirErr := os.Chdir(cmd.Dir); chdirErr != nil {
-		if _, writeErr := fmt.Fprintf(GinkgoWriter, "chdir dir: %q\n", chdirErr); writeErr != nil {
+		if _, writeErr := fmt.Fprintf(ginkgo.GinkgoWriter, "chdir dir: %q\n", chdirErr); writeErr != nil {
 			return "", fmt.Errorf("failed to change directory and write error: %w", chdirErr)
 		}
 	}
 
 	cmd.Env = append(os.Environ(), "GO111MODULE=on")
 	command := strings.Join(cmd.Args, " ")
-	if _, writeErr := fmt.Fprintf(GinkgoWriter, "running: %q\n", command); writeErr != nil {
+	if _, writeErr := fmt.Fprintf(ginkgo.GinkgoWriter, "running: %q\n", command); writeErr != nil {
 		return "", fmt.Errorf("failed to write command to GinkgoWriter: %w", writeErr)
 	}
 	output, err := cmd.CombinedOutput()

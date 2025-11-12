@@ -1,0 +1,15 @@
+{
+  "global": {
+    "nosec": false,
+    "audit": true
+  },
+  "severity": "medium",
+  "confidence": "medium",
+  "exclude": [],
+  "exclude-generated": true,
+  "exclude-dir": [
+    "vendor",
+    "testdata",
+    "bin"
+  ]
+}
