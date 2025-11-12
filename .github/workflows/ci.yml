@@ -132,15 +132,35 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Run govulncheck
+      - name: Run govulncheck (Go vulnerability database)
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
 
-      - name: Run Nancy (dependency vulnerability scanner)
-        run: |
-          go install github.com/sonatype-nexus-community/nancy@latest
-          go list -json -m all | nancy sleuth
+      - name: Run Trivy vulnerability scanner (filesystem mode)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-fs-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+
+      - name: Upload Trivy filesystem results to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs-results.sarif
+          category: trivy-filesystem
+
+      - name: Run Trivy vulnerability scanner (detailed report)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
 
   # Unit tests with coverage
   test:

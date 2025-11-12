@@ -139,6 +139,46 @@ verify: quality ## Verify code is ready for commit
 	@git diff --exit-code || (echo "❌ Uncommitted changes detected. Run 'make fmt' and commit." && exit 1)
 	@echo "✅ Code is ready for commit!"
 
+##@ Security
+
+.PHONY: vulncheck
+vulncheck: ## Run govulncheck to scan for known Go vulnerabilities
+	@echo "Running govulncheck..."
+	@if ! command -v govulncheck >/dev/null 2>&1 && [ ! -f $(GOBIN)/govulncheck ]; then \
+		echo "Installing govulncheck..."; \
+		go install golang.org/x/vuln/cmd/govulncheck@latest; \
+	fi
+	@PATH=$(GOBIN):$$PATH govulncheck ./...
+	@echo "✅ No vulnerabilities found!"
+
+.PHONY: security-scan
+security-scan: vulncheck ## Run comprehensive security scanning (govulncheck + gosec)
+	@echo "Running gosec security scanner..."
+	@if ! command -v gosec >/dev/null 2>&1 && [ ! -f $(GOBIN)/gosec ]; then \
+		echo "Installing gosec..."; \
+		go install github.com/securego/gosec/v2/cmd/gosec@latest; \
+	fi
+	@PATH=$(GOBIN):$$PATH gosec -quiet ./...
+	@echo "✅ Security scan completed!"
+
+.PHONY: trivy-scan
+trivy-scan: ## Run Trivy filesystem scan (requires Trivy installed)
+	@echo "Running Trivy filesystem scan..."
+	@command -v trivy >/dev/null 2>&1 || { \
+		echo "❌ Trivy is not installed. Install with: brew install trivy"; \
+		exit 1; \
+	}
+	@echo "Scanning for CRITICAL and HIGH vulnerabilities..."
+	@trivy fs . --severity CRITICAL,HIGH --exit-code 1
+	@echo ""
+	@echo "Full scan (all severities):"
+	@trivy fs . --severity CRITICAL,HIGH,MEDIUM,LOW
+	@echo "✅ Trivy scan completed!"
+
+.PHONY: security-full
+security-full: security-scan trivy-scan ## Run all security scans (govulncheck + gosec + Trivy)
+	@echo "✅ All security scans completed successfully!"
+
 ##@ Build
 
 .PHONY: build
