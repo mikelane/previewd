@@ -380,6 +380,49 @@ Scans Docker images for:
 - Configuration issues
 - Secrets in images
 
+**Testing Locally:**
+
+1. **Install Trivy:**
+   ```bash
+   # macOS
+   brew install aquasecurity/trivy/trivy
+
+   # Linux
+   curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+   ```
+
+2. **Build Docker Image:**
+   ```bash
+   docker build -t previewd:test .
+   ```
+
+3. **Run Trivy Scan:**
+   ```bash
+   # Interactive scan with table output
+   trivy image --severity CRITICAL,HIGH previewd:test
+
+   # Generate SARIF output (same format as CI)
+   trivy image --format sarif --output trivy-results.sarif --severity CRITICAL,HIGH previewd:test
+   ```
+
+4. **Verify Clean Scan:**
+   The scan should report 0 CRITICAL and 0 HIGH vulnerabilities. If vulnerabilities are found:
+   - Update Go version in `go.mod` and `Dockerfile`
+   - Update base image in `Dockerfile` (if OS package vulnerabilities)
+   - Run `go mod tidy` to update dependencies
+
+**Example Output (Clean):**
+```
+Report Summary
+┌──────────────────────────────┬──────────┬─────────────────┬─────────┐
+│            Target            │   Type   │ Vulnerabilities │ Secrets │
+├──────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ previewd:test (debian 12.12) │  debian  │        0        │    -    │
+├──────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ manager                      │ gobinary │        0        │    -    │
+└──────────────────────────────┴──────────┴─────────────────┴─────────┘
+```
+
 ### CodeQL - Semantic Analysis
 
 GitHub's advanced semantic code analysis for:
@@ -467,6 +510,52 @@ GitHub's advanced semantic code analysis for:
    ```
 
 3. Update `.golangci.yml` to exclude specific gosec rules if needed (but be cautious!)
+
+### Docker Build Failures
+
+**Problem**: Docker build fails in CI
+
+**Solution**:
+
+1. Test build locally:
+   ```bash
+   docker build -t previewd:test .
+   ```
+
+2. Common issues:
+   - **Go version mismatch**: Ensure `Dockerfile` Go version matches `go.mod`
+   - **Missing files**: Check `.dockerignore` isn't excluding required files
+   - **Build path**: Dockerfile builds `cmd/main.go`, ensure this path exists
+
+3. Verify build succeeds and image size is reasonable:
+   ```bash
+   docker images previewd:test
+   # Should be ~50-100MB (multi-stage build with distroless)
+   ```
+
+### Trivy Scan Failures
+
+**Problem**: Trivy finds CRITICAL or HIGH vulnerabilities
+
+**Solution**:
+
+1. Run scan locally to see details:
+   ```bash
+   trivy image --severity CRITICAL,HIGH previewd:test
+   ```
+
+2. Update vulnerable components:
+   - **Go stdlib vulnerabilities**: Update Go version in `go.mod` and `Dockerfile`
+   - **OS package vulnerabilities**: Update base image (e.g., `debian:12.12` → `debian:12.13`)
+   - **Dependency vulnerabilities**: Run `go get -u ./...` and `go mod tidy`
+
+3. Rebuild and rescan:
+   ```bash
+   docker build -t previewd:test .
+   trivy image --severity CRITICAL,HIGH previewd:test
+   ```
+
+4. Verify 0 vulnerabilities before pushing
 
 ### Workflow Permission Errors
 
