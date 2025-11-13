@@ -363,4 +363,4 @@ Previously, we used [Nancy](https://github.com/sonatype-nexus-community/nancy) f
 For security concerns or questions:
 - Open an issue with `area: security` label
 - Email: mikelane@gmail.com
-- Security vulnerabilities: See [SECURITY.md](../SECURITY.md)
+- Security vulnerabilities: See [SECURITY.md](../.github/SECURITY.md)
