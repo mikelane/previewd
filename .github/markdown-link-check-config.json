@@ -8,10 +8,18 @@
     }
   ],
   "replacementPatterns": [],
-  "httpHeaders": [],
-  "timeout": "20s",
+  "httpHeaders": [
+    {
+      "urls": ["https://opengitops.dev"],
+      "headers": {
+        "Accept": "text/html",
+        "User-Agent": "Mozilla/5.0 (compatible; markdown-link-check)"
+      }
+    }
+  ],
+  "timeout": "30s",
   "retryOn429": true,
-  "retryCount": 3,
-  "fallbackRetryDelay": "30s",
-  "aliveStatusCodes": [200, 206]
+  "retryCount": 5,
+  "fallbackRetryDelay": "10s",
+  "aliveStatusCodes": [200, 206, 301, 302]
 }
