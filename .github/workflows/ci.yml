@@ -241,13 +241,11 @@ jobs:
 
       - name: Run tests with branch coverage
         run: |
-          # Run tests and generate coverage in atomic mode (required for branch coverage)
-          go test -covermode=atomic -coverprofile=coverage.out ./... -v
+          # Use make cover to ensure envtest is properly set up
+          make cover
 
           # Parse coverage and check branch coverage
           # Note: Go's coverage includes branch coverage in atomic mode
-          go tool cover -func=coverage.out
-
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
           echo "Branch coverage: ${COVERAGE}%"
 
@@ -276,8 +274,14 @@ jobs:
       - name: Install go-mutesting
         run: go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest
 
+      - name: Setup envtest
+        run: make setup-envtest
+
       - name: Run mutation tests
         run: |
+          # Set up KUBEBUILDER_ASSETS for envtest
+          export KUBEBUILDER_ASSETS="$(bin/setup-envtest use 1.31 --bin-dir bin -p path)"
+
           # Run mutation testing on all packages except test and generated files
           PACKAGES=$(go list ./... | grep -v /test/ | grep -v /e2e)
 
@@ -299,7 +303,7 @@ jobs:
               continue
             fi
 
-            # Run mutation testing
+            # Run mutation testing with KUBEBUILDER_ASSETS set
             RESULT=$(go-mutesting --do-not-remove-tmp-folder $PKG_DIR 2>&1 || true)
             echo "$RESULT"
 
