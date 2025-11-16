@@ -279,8 +279,18 @@ jobs:
 
       - name: Run mutation tests
         run: |
-          # Set up KUBEBUILDER_ASSETS for envtest
-          export KUBEBUILDER_ASSETS="$(bin/setup-envtest use 1.31 --bin-dir bin -p path)"
+          # Dynamically determine K8s version from go.mod dependencies
+          K8S_VERSION=$(go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $3}')
+          echo "Using Kubernetes version: ${K8S_VERSION}"
+
+          # Set up KUBEBUILDER_ASSETS for envtest with error handling
+          KUBEBUILDER_ASSETS="$(bin/setup-envtest use ${K8S_VERSION} --bin-dir bin -p path)"
+          if [ -z "$KUBEBUILDER_ASSETS" ]; then
+            echo "Error: Failed to set up envtest binaries for Kubernetes ${K8S_VERSION}"
+            exit 1
+          fi
+          export KUBEBUILDER_ASSETS
+          echo "KUBEBUILDER_ASSETS set to: ${KUBEBUILDER_ASSETS}"
 
           # Run mutation testing on all packages except test and generated files
           PACKAGES=$(go list ./... | grep -v /test/ | grep -v /e2e)
