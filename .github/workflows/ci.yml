@@ -402,6 +402,7 @@ jobs:
         with:
           context: .
           push: false
+          load: true
           tags: previewd:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
