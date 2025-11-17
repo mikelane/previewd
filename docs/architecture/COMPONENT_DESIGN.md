@@ -625,31 +625,57 @@ func (s *Server) handlePRClosed(ctx context.Context, event *PullRequestEvent) er
 ```go
 // Client is the GitHub API client interface
 type Client interface {
-    FetchDiff(ctx context.Context, repo string, prNumber int) (string, error)
-    FetchPRMetadata(ctx context.Context, repo string, prNumber int) (*PRMetadata, error)
-    UpdateCommitStatus(ctx context.Context, repo string, sha string, status *CommitStatus) error
+    // GetPullRequest retrieves metadata about a pull request
+    GetPullRequest(ctx context.Context, owner, repo string, number int) (*PullRequest, error)
+    // GetPRFiles retrieves the list of files changed in a pull request
+    GetPRFiles(ctx context.Context, owner, repo string, number int) ([]*File, error)
+    // UpdateCommitStatus updates the status of a commit
+    UpdateCommitStatus(ctx context.Context, owner, repo, sha string, status *Status) error
 }
 
-type PRMetadata struct {
+type PullRequest struct {
+    Number      int
     Title       string
-    Author      string
-    Labels      []string
+    Description string
     HeadSHA     string
     BaseBranch  string
     HeadBranch  string
+    Author      string
+    State       string // open, closed, merged
+    Labels      []string
+    CreatedAt   time.Time
+    UpdatedAt   time.Time
 }
 
-type CommitStatus struct {
-    State       string  // pending, success, failure
-    TargetURL   string
-    Description string
-    Context     string
+type File struct {
+    Filename  string
+    Status    string // added, removed, modified, renamed
+    Additions int
+    Deletions int
+    Changes   int
+    Patch     string
 }
+
+type Status struct {
+    State       StatusState // pending, success, error, failure
+    TargetURL   string      // URL for more details
+    Description string      // Short description of the status
+    Context     string      // A unique name for this status check
+}
+
+type StatusState string
+
+const (
+    StatusStatePending StatusState = "pending"
+    StatusStateSuccess StatusState = "success"
+    StatusStateError   StatusState = "error"
+    StatusStateFailure StatusState = "failure"
+)
 ```
 
 ### Implementation
 
-Uses [go-github](https://github.com/google/go-github):
+Uses [go-github/v66](https://github.com/google/go-github):
 
 ```go
 package github
@@ -657,57 +683,115 @@ package github
 import (
     "context"
     "fmt"
+    "net/http"
+    "time"
 
-    "github.com/google/go-github/v57/github"
-    "golang.org/x/oauth2"
+    "github.com/google/go-github/v66/github"
 )
 
-type clientImpl struct {
-    gh *github.Client
+type githubClient struct {
+    client      *github.Client
+    retryConfig *RetryConfig
 }
 
-func NewClient(token string) Client {
-    ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
-    tc := oauth2.NewClient(context.Background(), ts)
-
-    return &clientImpl{
-        gh: github.NewClient(tc),
+func NewClient(token string) (Client, error) {
+    var httpClient *http.Client
+    if token != "" {
+        httpClient = github.NewClient(nil).Client()
+        httpClient.Transport = &github.BasicAuthTransport{
+            Username: "token",
+            Password: token,
+        }
     }
+
+    return &githubClient{
+        client: github.NewClient(httpClient),
+        retryConfig: &RetryConfig{
+            MaxRetries:     3,
+            InitialBackoff: 100 * time.Millisecond,
+            MaxBackoff:     30 * time.Second,
+            BackoffFactor:  2.0,
+        },
+    }, nil
 }
 
-func (c *clientImpl) FetchDiff(ctx context.Context, repo string, prNumber int) (string, error) {
-    owner, repoName := parseRepo(repo)
+func (c *githubClient) GetPullRequest(ctx context.Context, owner, repo string, number int) (*PullRequest, error) {
+    var pr *github.PullRequest
+    var err error
 
-    // Get PR diff as raw text
-    opts := github.RawOptions{Type: github.Diff}
-    diff, _, err := c.gh.PullRequests.GetRaw(ctx, owner, repoName, prNumber, opts)
+    err = c.executeWithRetry(ctx, func() error {
+        pr, _, err = c.client.PullRequests.Get(ctx, owner, repo, number)
+        return err
+    })
+
     if err != nil {
-        return "", fmt.Errorf("failed to fetch diff: %w", err)
+        return nil, fmt.Errorf("failed to get pull request: %w", err)
     }
 
-    return diff, nil
+    return c.convertPullRequest(pr), nil
 }
 
-func (c *clientImpl) UpdateCommitStatus(ctx context.Context, repo string, sha string, status *CommitStatus) error {
-    owner, repoName := parseRepo(repo)
+func (c *githubClient) GetPRFiles(ctx context.Context, owner, repo string, number int) ([]*File, error) {
+    allFiles := []*File{}
+    opts := &github.ListOptions{PerPage: 100}
 
+    for {
+        var files []*github.CommitFile
+        var resp *github.Response
+        var err error
+
+        err = c.executeWithRetry(ctx, func() error {
+            files, resp, err = c.client.PullRequests.ListFiles(ctx, owner, repo, number, opts)
+            return err
+        })
+
+        if err != nil {
+            return nil, fmt.Errorf("failed to list PR files: %w", err)
+        }
+
+        for _, file := range files {
+            allFiles = append(allFiles, c.convertFile(file))
+        }
+
+        if resp.NextPage == 0 {
+            break
+        }
+        opts.Page = resp.NextPage
+    }
+
+    return allFiles, nil
+}
+
+func (c *githubClient) UpdateCommitStatus(ctx context.Context, owner, repo, sha string, status *Status) error {
     repoStatus := &github.RepoStatus{
-        State:       github.String(status.State),
+        State:       github.String(string(status.State)),
         TargetURL:   github.String(status.TargetURL),
         Description: github.String(status.Description),
         Context:     github.String(status.Context),
     }
 
-    _, _, err := c.gh.Repositories.CreateStatus(ctx, owner, repoName, sha, repoStatus)
-    return err
+    err := c.executeWithRetry(ctx, func() error {
+        _, _, err := c.client.Repositories.CreateStatus(ctx, owner, repo, sha, repoStatus)
+        return err
+    })
+
+    if err != nil {
+        return fmt.Errorf("failed to update commit status: %w", err)
+    }
+
+    return nil
 }
 ```
 
 **Key Decisions**:
 - Interface for testability (mock client in tests)
-- Uses go-github library (mature, well-maintained)
-- OAuth token authentication (from Secret)
+- Uses go-github/v66 library (mature, well-maintained)
+- Token authentication via BasicAuthTransport
+- Automatic retry with exponential backoff for transient failures
+- Rate limit detection and handling
+- Pagination support for file lists
 - Minimal API surface (only needed methods)
+- Context cancellation support throughout
 
 ---
 
