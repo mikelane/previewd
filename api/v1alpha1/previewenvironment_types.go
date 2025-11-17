@@ -31,15 +31,45 @@ import (
 
 // PreviewEnvironmentSpec defines the desired state of PreviewEnvironment
 type PreviewEnvironmentSpec struct {
-	IngressPort   *int32             `json:"ingressPort,omitempty"`
+	// IngressPort is the port for ingress controller (default: 80)
+	// +optional
+	IngressPort *int32 `json:"ingressPort,omitempty"`
+
+	// ResourceQuota defines resource limits for the preview environment namespace
+	// +optional
 	ResourceQuota *ResourceQuotaSpec `json:"resourceQuota,omitempty"`
-	Repository    string             `json:"repository"`
-	HeadSHA       string             `json:"headSHA"`
-	BaseBranch    string             `json:"baseBranch,omitempty"`
-	HeadBranch    string             `json:"headBranch,omitempty"`
-	TTL           string             `json:"ttl,omitempty"`
-	Services      []string           `json:"services,omitempty"`
-	PRNumber      int                `json:"prNumber"`
+
+	// Repository is the GitHub repository (format: "owner/repo" or "https://github.com/owner/repo")
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^([a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+|https://github\.com/[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+)$`
+	Repository string `json:"repository"`
+
+	// PRNumber is the pull request number
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Minimum=1
+	PRNumber int `json:"prNumber"`
+
+	// HeadSHA is the git commit SHA of the PR head (40-character hex string)
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^[0-9a-f]{40}$`
+	HeadSHA string `json:"headSHA"`
+
+	// BaseBranch is the base branch name (e.g., "main")
+	// +optional
+	BaseBranch string `json:"baseBranch,omitempty"`
+
+	// HeadBranch is the PR branch name (e.g., "feature/test")
+	// +optional
+	HeadBranch string `json:"headBranch,omitempty"`
+
+	// TTL is the time-to-live for the preview environment (e.g., "4h", "2d")
+	// +optional
+	// +kubebuilder:default="4h"
+	TTL string `json:"ttl,omitempty"`
+
+	// Services is the list of services to deploy in the preview environment
+	// +optional
+	Services []string `json:"services,omitempty"`
 }
 
 // ResourceQuotaSpec defines resource quota limits for a preview environment
