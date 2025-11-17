@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"time"
 
+	previewv1alpha1 "github.com/mikelane/previewd/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -34,8 +35,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	previewv1alpha1 "github.com/mikelane/previewd/api/v1alpha1"
 )
 
 var _ = Describe("PreviewEnvironment Controller", func() {
@@ -283,8 +282,8 @@ var _ = Describe("PreviewEnvironment Controller", func() {
 				// Get the resource with finalizer
 				updatedResource := &previewv1alpha1.PreviewEnvironment{}
 				Eventually(func() []string {
-					err := k8sClient.Get(ctx, typeNamespacedName, updatedResource)
-					if err != nil {
+					getErr := k8sClient.Get(ctx, typeNamespacedName, updatedResource)
+					if getErr != nil {
 						return nil
 					}
 					return updatedResource.GetFinalizers()
@@ -301,8 +300,8 @@ var _ = Describe("PreviewEnvironment Controller", func() {
 
 				By("checking the finalizer is removed and CR is deleted")
 				Eventually(func() bool {
-					err := k8sClient.Get(ctx, typeNamespacedName, updatedResource)
-					return apierrors.IsNotFound(err)
+					getErr := k8sClient.Get(ctx, typeNamespacedName, updatedResource)
+					return apierrors.IsNotFound(getErr)
 				}, timeout, interval).Should(BeTrue())
 			})
 		})
@@ -342,8 +341,8 @@ var _ = Describe("PreviewEnvironment Controller", func() {
 				// Wait for status to be updated
 				updatedResource := &previewv1alpha1.PreviewEnvironment{}
 				Eventually(func() string {
-					err := k8sClient.Get(ctx, typeNamespacedName, updatedResource)
-					if err != nil {
+					getErr := k8sClient.Get(ctx, typeNamespacedName, updatedResource)
+					if getErr != nil {
 						return ""
 					}
 					return updatedResource.Status.Phase
@@ -429,8 +428,8 @@ var _ = Describe("PreviewEnvironment Controller", func() {
 					res := &previewv1alpha1.PreviewEnvironment{}
 					if err := k8sClient.Get(ctx, typeNamespacedName, res); err == nil {
 						res.Finalizers = []string{}
-						k8sClient.Update(ctx, res)
-						k8sClient.Delete(ctx, res)
+						_ = k8sClient.Update(ctx, res) //nolint:errcheck
+						_ = k8sClient.Delete(ctx, res) //nolint:errcheck
 					}
 				}()
 
@@ -484,10 +483,10 @@ var _ = Describe("PreviewEnvironment Controller", func() {
 	Describe("Condition Management", func() {
 		type conditionTestCase struct {
 			name              string
-			initialConditions []metav1.Condition
 			expectedType      string
-			expectedStatus    metav1.ConditionStatus
 			expectedReason    string
+			expectedStatus    metav1.ConditionStatus
+			initialConditions []metav1.Condition
 		}
 
 		DescribeTable("should manage conditions correctly",
@@ -523,8 +522,8 @@ var _ = Describe("PreviewEnvironment Controller", func() {
 					res := &previewv1alpha1.PreviewEnvironment{}
 					if err := k8sClient.Get(ctx, typeNamespacedName, res); err == nil {
 						res.Finalizers = []string{}
-						k8sClient.Update(ctx, res)
-						k8sClient.Delete(ctx, res)
+						_ = k8sClient.Update(ctx, res) //nolint:errcheck
+						_ = k8sClient.Delete(ctx, res) //nolint:errcheck
 					}
 				}()
 

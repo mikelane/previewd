@@ -80,7 +80,7 @@ func (r *PreviewEnvironmentReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	// Handle deletion
-	if !previewEnv.ObjectMeta.DeletionTimestamp.IsZero() {
+	if !previewEnv.DeletionTimestamp.IsZero() {
 		return r.handleDeletion(ctx, previewEnv)
 	}
 
