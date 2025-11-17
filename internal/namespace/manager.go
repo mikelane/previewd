@@ -35,7 +35,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-const managedByLabel = "previewd"
+const (
+	managedByLabel     = "previewd"
+	defaultIngressPort = 8080
+	maxNamespaceLength = 63
+)
 
 // Manager handles namespace lifecycle for preview environments
 type Manager struct {
@@ -101,12 +105,15 @@ func (m *Manager) EnsureResourceQuota(ctx context.Context, preview *previewv1alp
 	}
 
 	_, err := controllerutil.CreateOrUpdate(ctx, m.client, quota, func() error {
+		// Get resource quota values (from spec or defaults)
+		requestsCPU, limitsCPU, requestsMemory, limitsMemory := getResourceQuotaValues(preview)
+
 		// Set resource limits
 		quota.Spec.Hard = corev1.ResourceList{
-			corev1.ResourceRequestsCPU:            resource.MustParse("2"),
-			corev1.ResourceRequestsMemory:         resource.MustParse("4Gi"),
-			corev1.ResourceLimitsCPU:              resource.MustParse("4"),
-			corev1.ResourceLimitsMemory:           resource.MustParse("8Gi"),
+			corev1.ResourceRequestsCPU:            resource.MustParse(requestsCPU),
+			corev1.ResourceRequestsMemory:         resource.MustParse(requestsMemory),
+			corev1.ResourceLimitsCPU:              resource.MustParse(limitsCPU),
+			corev1.ResourceLimitsMemory:           resource.MustParse(limitsMemory),
 			corev1.ResourcePersistentVolumeClaims: resource.MustParse("0"),
 			"services.loadbalancers":              resource.MustParse("0"),
 		}
@@ -131,13 +138,16 @@ func (m *Manager) EnsureResourceQuota(ctx context.Context, preview *previewv1alp
 // EnsureNetworkPolicies creates network policies to isolate the preview environment
 // and control ingress/egress traffic.
 func (m *Manager) EnsureNetworkPolicies(ctx context.Context, preview *previewv1alpha1.PreviewEnvironment, namespace string) error {
+	// Get ingress port with default
+	ingressPort := getIngressPort(preview)
+
 	// Create default deny all policy
 	if err := m.ensureDefaultDenyPolicy(ctx, preview, namespace); err != nil {
 		return fmt.Errorf("failed to ensure default deny policy: %w", err)
 	}
 
 	// Create allow ingress from ingress controller
-	if err := m.ensureAllowIngressPolicy(ctx, preview, namespace); err != nil {
+	if err := m.ensureAllowIngressPolicy(ctx, preview, namespace, ingressPort); err != nil {
 		return fmt.Errorf("failed to ensure allow ingress policy: %w", err)
 	}
 
@@ -186,7 +196,7 @@ func (m *Manager) ensureDefaultDenyPolicy(ctx context.Context, preview *previewv
 }
 
 // ensureAllowIngressPolicy creates a NetworkPolicy that allows ingress from the ingress controller
-func (m *Manager) ensureAllowIngressPolicy(ctx context.Context, preview *previewv1alpha1.PreviewEnvironment, namespace string) error {
+func (m *Manager) ensureAllowIngressPolicy(ctx context.Context, preview *previewv1alpha1.PreviewEnvironment, namespace string, ingressPort int32) error {
 	policy := &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "allow-ingress",
@@ -203,9 +213,9 @@ func (m *Manager) ensureAllowIngressPolicy(ctx context.Context, preview *preview
 			networkingv1.PolicyTypeIngress,
 		}
 
-		// Allow ingress from ingress-nginx namespace on port 8080
+		// Allow ingress from ingress-nginx namespace on configured port
 		tcp := corev1.ProtocolTCP
-		port8080 := intstr.FromInt(8080)
+		port := intstr.FromInt(int(ingressPort))
 		policy.Spec.Ingress = []networkingv1.NetworkPolicyIngressRule{
 			{
 				From: []networkingv1.NetworkPolicyPeer{
@@ -220,7 +230,7 @@ func (m *Manager) ensureAllowIngressPolicy(ctx context.Context, preview *preview
 				Ports: []networkingv1.NetworkPolicyPort{
 					{
 						Protocol: &tcp,
-						Port:     &port8080,
+						Port:     &port,
 					},
 				},
 			},
@@ -260,6 +270,7 @@ func (m *Manager) ensureAllowEgressPolicy(ctx context.Context, preview *previewv
 		tcp := corev1.ProtocolTCP
 		udp := corev1.ProtocolUDP
 		port53 := intstr.FromInt(53)
+		port80 := intstr.FromInt(80)
 		port443 := intstr.FromInt(443)
 		port8080 := intstr.FromInt(8080)
 
@@ -279,6 +290,15 @@ func (m *Manager) ensureAllowEgressPolicy(ctx context.Context, preview *previewv
 					{
 						Protocol: &udp,
 						Port:     &port53,
+					},
+				},
+			},
+			// Allow HTTP to any destination
+			{
+				Ports: []networkingv1.NetworkPolicyPort{
+					{
+						Protocol: &tcp,
+						Port:     &port80,
 					},
 				},
 			},
@@ -344,8 +364,16 @@ func (m *Manager) Cleanup(ctx context.Context, preview *previewv1alpha1.PreviewE
 }
 
 // GetNamespaceName returns the namespace name for a preview environment
-func (m *Manager) GetNamespaceName(preview *previewv1alpha1.PreviewEnvironment) string {
-	return generateNamespaceName(preview.Spec.PRNumber, preview.Spec.Repository)
+// Returns an error if the generated namespace name exceeds Kubernetes' 63-character limit
+func (m *Manager) GetNamespaceName(preview *previewv1alpha1.PreviewEnvironment) (string, error) {
+	nsName := generateNamespaceName(preview.Spec.PRNumber, preview.Spec.Repository)
+
+	if len(nsName) > maxNamespaceLength {
+		return "", fmt.Errorf("generated namespace name %q exceeds maximum length of %d characters (got %d)",
+			nsName, maxNamespaceLength, len(nsName))
+	}
+
+	return nsName, nil
 }
 
 // generateNamespaceName generates a deterministic namespace name from PR number and repository
@@ -358,4 +386,40 @@ func generateNamespaceName(prNumber int, repository string) string {
 	// Format: preview-pr-{number}-{hash}
 	// This ensures unique namespaces even if multiple repositories use same PR numbers
 	return fmt.Sprintf("preview-pr-%d-%s", prNumber, hash)
+}
+
+// getIngressPort returns the ingress port from the preview environment spec,
+// or the default port if not specified
+func getIngressPort(preview *previewv1alpha1.PreviewEnvironment) int32 {
+	if preview.Spec.IngressPort != nil {
+		return *preview.Spec.IngressPort
+	}
+	return defaultIngressPort
+}
+
+// getResourceQuotaValues returns resource quota values from the spec or defaults
+func getResourceQuotaValues(preview *previewv1alpha1.PreviewEnvironment) (requestsCPU, limitsCPU, requestsMemory, limitsMemory string) {
+	// Set defaults
+	requestsCPU = "2"
+	limitsCPU = "4"
+	requestsMemory = "4Gi"
+	limitsMemory = "8Gi"
+
+	// Override with spec values if provided
+	if preview.Spec.ResourceQuota != nil {
+		if preview.Spec.ResourceQuota.RequestsCPU != "" {
+			requestsCPU = preview.Spec.ResourceQuota.RequestsCPU
+		}
+		if preview.Spec.ResourceQuota.LimitsCPU != "" {
+			limitsCPU = preview.Spec.ResourceQuota.LimitsCPU
+		}
+		if preview.Spec.ResourceQuota.RequestsMemory != "" {
+			requestsMemory = preview.Spec.ResourceQuota.RequestsMemory
+		}
+		if preview.Spec.ResourceQuota.LimitsMemory != "" {
+			limitsMemory = preview.Spec.ResourceQuota.LimitsMemory
+		}
+	}
+
+	return requestsCPU, limitsCPU, requestsMemory, limitsMemory
 }

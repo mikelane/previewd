@@ -499,6 +499,391 @@ func TestManager_Cleanup(t *testing.T) {
 	}
 }
 
+// Helper function to validate ingress port in network policy
+func validateIngressPort(t *testing.T, c client.Client, namespace string, expectedPort int32) {
+	t.Helper()
+	allowIngress := &networkingv1.NetworkPolicy{}
+	err := c.Get(context.Background(), types.NamespacedName{
+		Name:      "allow-ingress",
+		Namespace: namespace,
+	}, allowIngress)
+	if err != nil {
+		t.Errorf("failed to get allow-ingress policy: %v", err)
+		return
+	}
+
+	// Verify ingress port
+	found := false
+	for _, rule := range allowIngress.Spec.Ingress {
+		for _, port := range rule.Ports {
+			if port.Port != nil && port.Port.IntVal == expectedPort {
+				found = true
+				break
+			}
+		}
+		if found {
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected ingress port %d not found in network policy", expectedPort)
+	}
+}
+
+// Test custom ingress port configuration
+func TestManager_EnsureNetworkPolicies_CustomIngressPort(t *testing.T) {
+	tests := []struct {
+		preview     *previewv1alpha1.PreviewEnvironment
+		name        string
+		namespace   string
+		ingressPort int32
+	}{
+		{
+			name: "uses custom ingress port 3000",
+			preview: &previewv1alpha1.PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pr-111",
+					Namespace: "previewd-system",
+					UID:       "test-uid-7",
+				},
+				Spec: previewv1alpha1.PreviewEnvironmentSpec{
+					PRNumber:    111,
+					Repository:  "owner/repo",
+					IngressPort: func() *int32 { p := int32(3000); return &p }(),
+				},
+			},
+			namespace:   "preview-pr-111-65e817ee",
+			ingressPort: 3000,
+		},
+		{
+			name: "uses default ingress port 8080 when not specified",
+			preview: &previewv1alpha1.PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pr-222",
+					Namespace: "previewd-system",
+					UID:       "test-uid-8",
+				},
+				Spec: previewv1alpha1.PreviewEnvironmentSpec{
+					PRNumber:   222,
+					Repository: "owner/repo",
+				},
+			},
+			namespace:   "preview-pr-222-65e817ee",
+			ingressPort: 8080,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			if err := previewv1alpha1.AddToScheme(scheme); err != nil {
+				t.Fatalf("failed to add preview scheme: %v", err)
+			}
+			if err := corev1.AddToScheme(scheme); err != nil {
+				t.Fatalf("failed to add core scheme: %v", err)
+			}
+			if err := networkingv1.AddToScheme(scheme); err != nil {
+				t.Fatalf("failed to add networking scheme: %v", err)
+			}
+
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: tt.namespace,
+				},
+			}
+
+			c := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(ns).
+				Build()
+
+			m := NewManager(c, scheme)
+			err := m.EnsureNetworkPolicies(context.Background(), tt.preview, tt.namespace)
+			if err != nil {
+				t.Errorf("EnsureNetworkPolicies() error = %v", err)
+				return
+			}
+
+			validateIngressPort(t, c, tt.namespace, tt.ingressPort)
+		})
+	}
+}
+
+// Test HTTP egress rule
+func TestManager_EnsureNetworkPolicies_HTTPEgress(t *testing.T) {
+	preview := &previewv1alpha1.PreviewEnvironment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pr-333",
+			Namespace: "previewd-system",
+			UID:       "test-uid-9",
+		},
+		Spec: previewv1alpha1.PreviewEnvironmentSpec{
+			PRNumber:   333,
+			Repository: "owner/repo",
+		},
+	}
+	namespace := "preview-pr-333-65e817ee"
+
+	scheme := runtime.NewScheme()
+	if err := previewv1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add preview scheme: %v", err)
+	}
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add core scheme: %v", err)
+	}
+	if err := networkingv1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add networking scheme: %v", err)
+	}
+
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
+
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(ns).
+		Build()
+
+	m := NewManager(c, scheme)
+	err := m.EnsureNetworkPolicies(context.Background(), preview, namespace)
+
+	if err != nil {
+		t.Fatalf("EnsureNetworkPolicies() error = %v", err)
+	}
+
+	// Validate HTTP egress rule exists
+	allowEgress := &networkingv1.NetworkPolicy{}
+	err = c.Get(context.Background(), types.NamespacedName{
+		Name:      "allow-egress",
+		Namespace: namespace,
+	}, allowEgress)
+	if err != nil {
+		t.Fatalf("failed to get allow-egress policy: %v", err)
+	}
+
+	// Check for HTTP egress rule (port 80)
+	foundHTTP := false
+	for _, rule := range allowEgress.Spec.Egress {
+		for _, port := range rule.Ports {
+			if port.Port != nil && port.Port.IntVal == 80 {
+				foundHTTP = true
+				break
+			}
+		}
+	}
+	if !foundHTTP {
+		t.Errorf("expected HTTP egress rule (port 80) not found in network policy")
+	}
+}
+
+// Test custom resource quotas
+func TestManager_EnsureResourceQuota_CustomQuota(t *testing.T) {
+	tests := []struct {
+		validateFn func(t *testing.T, c client.Client, namespace string)
+		preview    *previewv1alpha1.PreviewEnvironment
+		name       string
+		namespace  string
+		wantErr    bool
+	}{
+		{
+			name: "creates resource quota with custom limits",
+			preview: &previewv1alpha1.PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pr-444",
+					Namespace: "previewd-system",
+					UID:       "test-uid-10",
+				},
+				Spec: previewv1alpha1.PreviewEnvironmentSpec{
+					PRNumber:   444,
+					Repository: "owner/repo",
+					ResourceQuota: &previewv1alpha1.ResourceQuotaSpec{
+						RequestsCPU:    "1",
+						LimitsCPU:      "2",
+						RequestsMemory: "2Gi",
+						LimitsMemory:   "4Gi",
+					},
+				},
+			},
+			namespace: "preview-pr-444-65e817ee",
+			validateFn: func(t *testing.T, c client.Client, namespace string) {
+				quota := &corev1.ResourceQuota{}
+				err := c.Get(context.Background(), types.NamespacedName{
+					Name:      "preview-quota",
+					Namespace: namespace,
+				}, quota)
+				if err != nil {
+					t.Errorf("failed to get resource quota: %v", err)
+					return
+				}
+
+				// Check custom CPU requests
+				cpuRequests := quota.Spec.Hard[corev1.ResourceRequestsCPU]
+				expectedCPU := resource.MustParse("1")
+				if !cpuRequests.Equal(expectedCPU) {
+					t.Errorf("expected CPU requests to be %v, got %v", expectedCPU, cpuRequests)
+				}
+
+				// Check custom memory limits
+				memLimits := quota.Spec.Hard[corev1.ResourceLimitsMemory]
+				expectedMem := resource.MustParse("4Gi")
+				if !memLimits.Equal(expectedMem) {
+					t.Errorf("expected memory limits to be %v, got %v", expectedMem, memLimits)
+				}
+			},
+		},
+		{
+			name: "uses default resource quota when not specified",
+			preview: &previewv1alpha1.PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pr-555",
+					Namespace: "previewd-system",
+					UID:       "test-uid-11",
+				},
+				Spec: previewv1alpha1.PreviewEnvironmentSpec{
+					PRNumber:   555,
+					Repository: "owner/repo",
+				},
+			},
+			namespace: "preview-pr-555-65e817ee",
+			validateFn: func(t *testing.T, c client.Client, namespace string) {
+				quota := &corev1.ResourceQuota{}
+				err := c.Get(context.Background(), types.NamespacedName{
+					Name:      "preview-quota",
+					Namespace: namespace,
+				}, quota)
+				if err != nil {
+					t.Errorf("failed to get resource quota: %v", err)
+					return
+				}
+
+				// Check default CPU requests
+				cpuRequests := quota.Spec.Hard[corev1.ResourceRequestsCPU]
+				expectedCPU := resource.MustParse("2")
+				if !cpuRequests.Equal(expectedCPU) {
+					t.Errorf("expected default CPU requests to be %v, got %v", expectedCPU, cpuRequests)
+				}
+
+				// Check default memory requests
+				memRequests := quota.Spec.Hard[corev1.ResourceRequestsMemory]
+				expectedMem := resource.MustParse("4Gi")
+				if !memRequests.Equal(expectedMem) {
+					t.Errorf("expected default memory requests to be %v, got %v", expectedMem, memRequests)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			if err := previewv1alpha1.AddToScheme(scheme); err != nil {
+				t.Fatalf("failed to add preview scheme: %v", err)
+			}
+			if err := corev1.AddToScheme(scheme); err != nil {
+				t.Fatalf("failed to add core scheme: %v", err)
+			}
+
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: tt.namespace,
+				},
+			}
+
+			c := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(ns).
+				Build()
+
+			m := NewManager(c, scheme)
+			err := m.EnsureResourceQuota(context.Background(), tt.preview, tt.namespace)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("EnsureResourceQuota() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if tt.validateFn != nil {
+				tt.validateFn(t, c, tt.namespace)
+			}
+		})
+	}
+}
+
+// Test namespace length validation
+func TestManager_GetNamespaceName_LengthValidation(t *testing.T) {
+	tests := []struct {
+		preview      *previewv1alpha1.PreviewEnvironment
+		name         string
+		expectedName string
+		wantErr      bool
+	}{
+		{
+			name: "valid namespace name within 63 character limit",
+			preview: &previewv1alpha1.PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pr-123",
+					Namespace: "previewd-system",
+				},
+				Spec: previewv1alpha1.PreviewEnvironmentSpec{
+					PRNumber:   123,
+					Repository: "owner/repo",
+				},
+			},
+			wantErr:      false,
+			expectedName: "preview-pr-123-65e817ee",
+		},
+		{
+			name: "maximum valid PR number still within limit",
+			preview: &previewv1alpha1.PreviewEnvironment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pr-2147483647",
+					Namespace: "previewd-system",
+				},
+				Spec: previewv1alpha1.PreviewEnvironmentSpec{
+					PRNumber:   2147483647, // Max int32
+					Repository: "owner/repo",
+				},
+			},
+			wantErr:      false,
+			expectedName: "preview-pr-2147483647-65e817ee", // 30 chars - well under 63
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			if err := previewv1alpha1.AddToScheme(scheme); err != nil {
+				t.Fatalf("failed to add preview scheme: %v", err)
+			}
+			if err := corev1.AddToScheme(scheme); err != nil {
+				t.Fatalf("failed to add core scheme: %v", err)
+			}
+
+			c := fake.NewClientBuilder().
+				WithScheme(scheme).
+				Build()
+
+			m := NewManager(c, scheme)
+			nsName, err := m.GetNamespaceName(tt.preview)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetNamespaceName() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if !tt.wantErr && nsName != tt.expectedName {
+				t.Errorf("GetNamespaceName() = %v, want %v", nsName, tt.expectedName)
+			}
+
+			// Verify length is always within limit
+			if !tt.wantErr && len(nsName) > 63 {
+				t.Errorf("Generated namespace name %q exceeds 63 character limit (length: %d)", nsName, len(nsName))
+			}
+		})
+	}
+}
+
 // Helper function tests
 func TestGenerateNamespaceName(t *testing.T) {
 	tests := []struct {
