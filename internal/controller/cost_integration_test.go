@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	previewv1alpha1 "github.com/mikelane/previewd/api/v1alpha1"
+	"github.com/mikelane/previewd/internal/cost"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,9 +40,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	previewv1alpha1 "github.com/mikelane/previewd/api/v1alpha1"
-	"github.com/mikelane/previewd/internal/cost"
 )
 
 var (
@@ -49,19 +48,22 @@ var (
 
 func init() {
 	// Register our types with the scheme
-	_ = clientgoscheme.AddToScheme(testScheme)
-	_ = previewv1alpha1.AddToScheme(testScheme)
+	if err := clientgoscheme.AddToScheme(testScheme); err != nil {
+		panic(err)
+	}
+	if err := previewv1alpha1.AddToScheme(testScheme); err != nil {
+		panic(err)
+	}
 }
 
 func TestReconciler_UpdatesCostEstimate(t *testing.T) {
 	tests := []struct {
-		name     string
-		preview  *previewv1alpha1.PreviewEnvironment
 		pods     []corev1.Pod
+		name     string
 		wantCost *previewv1alpha1.CostEstimate
+		preview  *previewv1alpha1.PreviewEnvironment
 	}{
 		{
-			name: "updates cost estimate for preview environment",
 			preview: &previewv1alpha1.PreviewEnvironment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-preview",
@@ -99,6 +101,7 @@ func TestReconciler_UpdatesCostEstimate(t *testing.T) {
 					},
 				},
 			},
+			name: "updates cost estimate for preview environment",
 			wantCost: &previewv1alpha1.CostEstimate{
 				Currency:   "USD",
 				HourlyCost: "0.05",
@@ -166,39 +169,44 @@ func TestReconciler_UpdatesCostEstimate(t *testing.T) {
 
 func TestParseTTL(t *testing.T) {
 	tests := []struct {
-		name    string
 		ttl     string
+		name    string
 		want    time.Duration
 		wantErr bool
 	}{
 		{
-			name: "parses hours",
-			ttl:  "4h",
-			want: 4 * time.Hour,
+			ttl:     "4h",
+			name:    "parses hours",
+			want:    4 * time.Hour,
+			wantErr: false,
 		},
 		{
-			name: "parses minutes",
-			ttl:  "30m",
-			want: 30 * time.Minute,
+			ttl:     "30m",
+			name:    "parses minutes",
+			want:    30 * time.Minute,
+			wantErr: false,
 		},
 		{
-			name: "parses days",
-			ttl:  "2d",
-			want: 48 * time.Hour,
+			ttl:     "2d",
+			name:    "parses days",
+			want:    48 * time.Hour,
+			wantErr: false,
 		},
 		{
-			name: "parses complex duration",
-			ttl:  "1h30m",
-			want: 90 * time.Minute,
+			ttl:     "1h30m",
+			name:    "parses complex duration",
+			want:    90 * time.Minute,
+			wantErr: false,
 		},
 		{
-			name: "handles empty string",
-			ttl:  "",
-			want: 4 * time.Hour, // default
+			ttl:     "",
+			name:    "handles empty string",
+			want:    4 * time.Hour, // default
+			wantErr: false,
 		},
 		{
-			name:    "handles invalid format",
 			ttl:     "invalid",
+			name:    "handles invalid format",
 			wantErr: true,
 		},
 	}

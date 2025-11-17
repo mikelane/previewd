@@ -28,38 +28,37 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mikelane/previewd/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/mikelane/previewd/api/v1alpha1"
 )
 
 func TestNewEstimator(t *testing.T) {
 	tests := []struct {
-		name   string
-		config *Config
 		want   *Config
+		config *Config
+		name   string
 	}{
 		{
-			name:   "creates estimator with default config",
-			config: nil,
+			name: "creates estimator with default config",
 			want: &Config{
 				CPUCostPerHour:    0.04,
 				MemoryCostPerHour: 0.005,
 				SpotDiscount:      0.30,
 				Currency:          "USD",
 			},
+			config: nil,
 		},
 		{
 			name: "creates estimator with custom config",
-			config: &Config{
+			want: &Config{
 				CPUCostPerHour:    0.08,
 				MemoryCostPerHour: 0.01,
 				SpotDiscount:      0.40,
 				Currency:          "EUR",
 			},
-			want: &Config{
+			config: &Config{
 				CPUCostPerHour:    0.08,
 				MemoryCostPerHour: 0.01,
 				SpotDiscount:      0.40,
@@ -92,14 +91,13 @@ func TestNewEstimator(t *testing.T) {
 
 func TestCalculatePodCost(t *testing.T) {
 	tests := []struct {
-		name     string
 		pod      *corev1.Pod
+		name     string
+		want     float64
 		duration time.Duration
 		useSpot  bool
-		want     float64
 	}{
 		{
-			name: "calculates cost for pod with CPU and memory",
 			pod: &corev1.Pod{
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -115,12 +113,12 @@ func TestCalculatePodCost(t *testing.T) {
 					},
 				},
 			},
+			name:     "calculates cost for pod with CPU and memory",
+			want:     0.025, // (0.5 * 0.04) + (1 * 0.005) = 0.020 + 0.005 = 0.025
 			duration: 1 * time.Hour,
 			useSpot:  false,
-			want:     0.025, // (0.5 * 0.04) + (1 * 0.005) = 0.020 + 0.005 = 0.025
 		},
 		{
-			name: "calculates cost for pod with multiple containers",
 			pod: &corev1.Pod{
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -145,12 +143,12 @@ func TestCalculatePodCost(t *testing.T) {
 					},
 				},
 			},
+			name:     "calculates cost for pod with multiple containers",
+			want:     0.0605, // (1.2 * 0.04) + (2.5 * 0.005) = 0.048 + 0.0125 = 0.0605
 			duration: 1 * time.Hour,
 			useSpot:  false,
-			want:     0.0605, // (1.2 * 0.04) + (2.5 * 0.005) = 0.048 + 0.0125 = 0.0605
 		},
 		{
-			name: "applies spot discount",
 			pod: &corev1.Pod{
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -166,12 +164,12 @@ func TestCalculatePodCost(t *testing.T) {
 					},
 				},
 			},
+			name:     "applies spot discount",
+			want:     0.0315, // ((1 * 0.04) + (1 * 0.005)) * 0.7 = 0.045 * 0.7 = 0.0315
 			duration: 1 * time.Hour,
 			useSpot:  true,
-			want:     0.0315, // ((1 * 0.04) + (1 * 0.005)) * 0.7 = 0.045 * 0.7 = 0.0315
 		},
 		{
-			name: "calculates cost for 24 hours",
 			pod: &corev1.Pod{
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -187,12 +185,12 @@ func TestCalculatePodCost(t *testing.T) {
 					},
 				},
 			},
+			name:     "calculates cost for 24 hours",
+			want:     2.40, // ((2 * 0.04) + (4 * 0.005)) * 24 = 0.1 * 24 = 2.40
 			duration: 24 * time.Hour,
 			useSpot:  false,
-			want:     2.40, // ((2 * 0.04) + (4 * 0.005)) * 24 = 0.1 * 24 = 2.40
 		},
 		{
-			name: "handles pod with no resource requests",
 			pod: &corev1.Pod{
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -203,12 +201,12 @@ func TestCalculatePodCost(t *testing.T) {
 					},
 				},
 			},
+			name:     "handles pod with no resource requests",
+			want:     0.0,
 			duration: 1 * time.Hour,
 			useSpot:  false,
-			want:     0.0,
 		},
 		{
-			name: "handles fractional hours",
 			pod: &corev1.Pod{
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -224,9 +222,10 @@ func TestCalculatePodCost(t *testing.T) {
 					},
 				},
 			},
+			name:     "handles fractional hours",
+			want:     0.0675,           // ((1 * 0.04) + (1 * 0.005)) * 1.5 = 0.045 * 1.5 = 0.0675
 			duration: 90 * time.Minute, // 1.5 hours
 			useSpot:  false,
-			want:     0.0675, // ((1 * 0.04) + (1 * 0.005)) * 1.5 = 0.045 * 1.5 = 0.0675
 		},
 	}
 
@@ -244,14 +243,13 @@ func TestCalculatePodCost(t *testing.T) {
 
 func TestEstimateEnvironmentCost(t *testing.T) {
 	tests := []struct {
-		name    string
 		pods    []corev1.Pod
+		name    string
+		want    *v1alpha1.CostEstimate
 		ttl     time.Duration
 		useSpot bool
-		want    *v1alpha1.CostEstimate
 	}{
 		{
-			name: "estimates cost for single pod environment",
 			pods: []corev1.Pod{
 				{
 					Spec: corev1.PodSpec{
@@ -269,16 +267,16 @@ func TestEstimateEnvironmentCost(t *testing.T) {
 					},
 				},
 			},
-			ttl:     4 * time.Hour,
-			useSpot: false,
+			name: "estimates cost for single pod environment",
 			want: &v1alpha1.CostEstimate{
 				Currency:   "USD",
 				HourlyCost: "0.05",
 				TotalCost:  "0.20",
 			},
+			ttl:     4 * time.Hour,
+			useSpot: false,
 		},
 		{
-			name: "estimates cost for multi-pod environment",
 			pods: []corev1.Pod{
 				{
 					Spec: corev1.PodSpec{
@@ -326,16 +324,16 @@ func TestEstimateEnvironmentCost(t *testing.T) {
 					},
 				},
 			},
-			ttl:     8 * time.Hour,
-			useSpot: false,
+			name: "estimates cost for multi-pod environment",
 			want: &v1alpha1.CostEstimate{
 				Currency:   "USD",
 				HourlyCost: "0.18", // Total hourly: (0.5*0.04 + 1*0.005) + (1*0.04 + 2*0.005) + (2*0.04 + 4*0.005) = 0.025 + 0.05 + 0.1 = 0.175 rounded to 0.18
 				TotalCost:  "1.40", // 0.175 * 8 = 1.4
 			},
+			ttl:     8 * time.Hour,
+			useSpot: false,
 		},
 		{
-			name: "estimates cost with spot instances",
 			pods: []corev1.Pod{
 				{
 					Spec: corev1.PodSpec{
@@ -353,24 +351,25 @@ func TestEstimateEnvironmentCost(t *testing.T) {
 					},
 				},
 			},
-			ttl:     24 * time.Hour,
-			useSpot: true,
+			name: "estimates cost with spot instances",
 			want: &v1alpha1.CostEstimate{
 				Currency:   "USD",
 				HourlyCost: "0.07", // (2*0.04 + 4*0.005) * 0.7 = 0.1 * 0.7 = 0.07
 				TotalCost:  "1.68", // 0.07 * 24 = 1.68
 			},
+			ttl:     24 * time.Hour,
+			useSpot: true,
 		},
 		{
-			name:    "handles empty pod list",
-			pods:    []corev1.Pod{},
-			ttl:     4 * time.Hour,
-			useSpot: false,
+			pods: []corev1.Pod{},
+			name: "handles empty pod list",
 			want: &v1alpha1.CostEstimate{
 				Currency:   "USD",
 				HourlyCost: "0.00",
 				TotalCost:  "0.00",
 			},
+			ttl:     4 * time.Hour,
+			useSpot: false,
 		},
 	}
 

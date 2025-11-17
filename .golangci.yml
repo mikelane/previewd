@@ -92,14 +92,19 @@ linters:
           - dupl
           - lll
         path: internal/*
+      - linters:
+          - govet
+        path: internal/cost/estimator.go
+        text: "fieldalignment"
       # Exclude test files from some linters
       - path: _test\.go
         linters:
           - gocyclo
           - gosec
           - goconst
+          - govet
           - revive
-        text: "dot-imports"
+        text: "fieldalignment|dot-imports"
       # Exclude test utility files from dot-imports rule
       - path: test/utils/
         linters:

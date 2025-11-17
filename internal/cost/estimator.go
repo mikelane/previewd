@@ -29,23 +29,19 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/mikelane/previewd/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-
-	"github.com/mikelane/previewd/api/v1alpha1"
 )
 
 // Config defines the pricing configuration for cost estimation
 type Config struct {
 	// CPUCostPerHour is the cost per vCPU hour in dollars
 	CPUCostPerHour float64
-
 	// MemoryCostPerHour is the cost per GB of memory per hour in dollars
 	MemoryCostPerHour float64
-
 	// SpotDiscount is the discount applied to spot instances (0.3 = 30% discount)
 	SpotDiscount float64
-
 	// Currency is the currency code for cost estimates
 	Currency string
 }
