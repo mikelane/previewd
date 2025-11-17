@@ -30,11 +30,20 @@ import (
 
 	previewv1alpha1 "github.com/mikelane/previewd/api/v1alpha1"
 	"github.com/mikelane/previewd/internal/cost"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+)
+
+const (
+	// finalizerName is the finalizer used to prevent deletion until cleanup is complete
+	finalizerName = "preview.previewd.io/finalizer"
 )
 
 // PreviewEnvironmentReconciler reconciles a PreviewEnvironment object
@@ -55,63 +64,167 @@ type PreviewEnvironmentReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.22.1/pkg/reconcile
 func (r *PreviewEnvironmentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := logf.FromContext(ctx)
+	logger := logf.FromContext(ctx)
 
-	// Fetch the PreviewEnvironment instance
-	var preview previewv1alpha1.PreviewEnvironment
-	if err := r.Get(ctx, req.NamespacedName, &preview); err != nil {
-		// Resource not found, return without error
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+	// Fetch the PreviewEnvironment resource
+	previewEnv := &previewv1alpha1.PreviewEnvironment{}
+	if err := r.Get(ctx, req.NamespacedName, previewEnv); err != nil {
+		if apierrors.IsNotFound(err) {
+			// Resource has been deleted, nothing to do
+			logger.Info("PreviewEnvironment resource not found, likely deleted")
+			return ctrl.Result{}, nil
+		}
+		// Error reading the object - requeue the request
+		logger.Error(err, "Failed to get PreviewEnvironment")
+		return ctrl.Result{}, err
 	}
 
+	// Handle deletion
+	if !previewEnv.ObjectMeta.DeletionTimestamp.IsZero() {
+		return r.handleDeletion(ctx, previewEnv)
+	}
+
+	// Add finalizer if it doesn't exist
+	if !controllerutil.ContainsFinalizer(previewEnv, finalizerName) {
+		controllerutil.AddFinalizer(previewEnv, finalizerName)
+		if err := r.Update(ctx, previewEnv); err != nil {
+			logger.Error(err, "Failed to add finalizer")
+			return ctrl.Result{}, err
+		}
+		logger.Info("Added finalizer to PreviewEnvironment")
+
+		// Re-fetch the resource after updating finalizer to ensure we have latest version
+		if err := r.Get(ctx, req.NamespacedName, previewEnv); err != nil {
+			logger.Error(err, "Failed to re-fetch PreviewEnvironment after finalizer update")
+			return ctrl.Result{}, err
+		}
+	}
+
+	// Initialize status if this is a new resource
+	if err := r.initializeStatus(ctx, previewEnv); err != nil {
+		logger.Error(err, "Failed to initialize status")
+		return ctrl.Result{}, err
+	}
+
+	// Perform cost estimation after status is initialized
+	if err := r.estimateAndUpdateCosts(ctx, previewEnv); err != nil {
+		logger.Error(err, "Failed to estimate costs (non-fatal, will retry)")
+		// Log the error but don't fail - cost estimation is best-effort
+	}
+
+	// Requeue after 5 minutes for periodic reconciliation
+	return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+}
+
+// handleDeletion performs cleanup when a PreviewEnvironment is being deleted
+func (r *PreviewEnvironmentReconciler) handleDeletion(ctx context.Context, previewEnv *previewv1alpha1.PreviewEnvironment) (ctrl.Result, error) {
+	logger := logf.FromContext(ctx)
+
+	if controllerutil.ContainsFinalizer(previewEnv, finalizerName) {
+		// Perform cleanup here (will be implemented in future PRs)
+		// For now, just remove the finalizer to allow deletion
+		logger.Info("Performing cleanup for PreviewEnvironment deletion")
+
+		controllerutil.RemoveFinalizer(previewEnv, finalizerName)
+		if err := r.Update(ctx, previewEnv); err != nil {
+			logger.Error(err, "Failed to remove finalizer")
+			return ctrl.Result{}, err
+		}
+		logger.Info("Removed finalizer, PreviewEnvironment can now be deleted")
+	}
+
+	return ctrl.Result{}, nil
+}
+
+// estimateAndUpdateCosts performs cost estimation for the preview environment
+func (r *PreviewEnvironmentReconciler) estimateAndUpdateCosts(ctx context.Context, previewEnv *previewv1alpha1.PreviewEnvironment) error {
+	logger := logf.FromContext(ctx)
 	// Initialize cost estimator if not already done
 	if r.CostEstimator == nil {
 		r.CostEstimator = cost.NewEstimator(nil)
 	}
 
 	// Skip cost calculation if environment namespace is not set
-	if preview.Status.Namespace == "" {
-		log.Info("Preview environment namespace not yet created, skipping cost estimation")
-		return ctrl.Result{}, nil
+	if previewEnv.Status.Namespace == "" {
+		logger.Info("Preview environment namespace not yet created, skipping cost estimation")
+		return nil
 	}
 
 	// List all pods in the preview environment namespace
 	var podList corev1.PodList
-	if err := r.List(ctx, &podList, client.InNamespace(preview.Status.Namespace)); err != nil {
-		log.Error(err, "Failed to list pods", "namespace", preview.Status.Namespace)
-		return ctrl.Result{}, err
+	if err := r.List(ctx, &podList, client.InNamespace(previewEnv.Status.Namespace)); err != nil {
+		return fmt.Errorf("failed to list pods in namespace %s: %w", previewEnv.Status.Namespace, err)
 	}
 
 	// Parse TTL from spec
-	ttl, err := parseTTL(preview.Spec.TTL)
+	ttl, err := parseTTL(previewEnv.Spec.TTL)
 	if err != nil {
-		log.Error(err, "Failed to parse TTL, using default", "ttl", preview.Spec.TTL)
+		logger.Error(err, "Failed to parse TTL, using default", "ttl", previewEnv.Spec.TTL)
 		ttl = 4 * time.Hour
 	}
 
 	// Check if spot instances should be used
-	useSpot := checkSpotInstance(&preview)
+	useSpot := checkSpotInstance(previewEnv)
 
 	// Calculate cost estimate
 	costEstimate := r.CostEstimator.EstimateEnvironmentCost(podList.Items, ttl, useSpot)
 
 	// Update status with cost estimate
-	preview.Status.CostEstimate = costEstimate
+	previewEnv.Status.CostEstimate = costEstimate
 
 	// Update the status
-	if err := r.Status().Update(ctx, &preview); err != nil {
-		log.Error(err, "Failed to update preview environment status")
-		return ctrl.Result{}, err
+	if err := r.Status().Update(ctx, previewEnv); err != nil {
+		return fmt.Errorf("failed to update preview environment status: %w", err)
 	}
 
-	log.Info("Updated cost estimate",
-		"namespace", preview.Status.Namespace,
+	logger.Info("Updated cost estimate",
+		"namespace", previewEnv.Status.Namespace,
 		"hourlyCost", costEstimate.HourlyCost,
 		"totalCost", costEstimate.TotalCost,
 		"useSpot", useSpot)
 
-	// Requeue after 5 minutes to update cost estimates
-	return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+	return nil
+}
+
+// initializeStatus sets up initial status fields for a new PreviewEnvironment
+func (r *PreviewEnvironmentReconciler) initializeStatus(ctx context.Context, previewEnv *previewv1alpha1.PreviewEnvironment) error {
+	logger := logf.FromContext(ctx)
+
+	// Check if status has already been initialized
+	if previewEnv.Status.Phase != "" && previewEnv.Status.CreatedAt != nil {
+		// Status already initialized, skip
+		return nil
+	}
+
+	// Set initial phase
+	previewEnv.Status.Phase = "Pending"
+
+	// Set creation timestamp if not already set
+	if previewEnv.Status.CreatedAt == nil {
+		now := metav1.NewTime(time.Now())
+		previewEnv.Status.CreatedAt = &now
+	}
+
+	// Set observed generation
+	previewEnv.Status.ObservedGeneration = previewEnv.Generation
+
+	// Set Ready condition to False
+	meta.SetStatusCondition(&previewEnv.Status.Conditions, metav1.Condition{
+		Type:               "Ready",
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: previewEnv.Generation,
+		Reason:             "Reconciling",
+		Message:            "PreviewEnvironment is being reconciled",
+		LastTransitionTime: metav1.Now(),
+	})
+
+	// Update status subresource
+	if err := r.Status().Update(ctx, previewEnv); err != nil {
+		return fmt.Errorf("failed to update status: %w", err)
+	}
+
+	logger.Info("Initialized PreviewEnvironment status", "phase", previewEnv.Status.Phase)
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
