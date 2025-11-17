@@ -35,6 +35,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
+const managedByLabel = "previewd"
+
 // Manager handles namespace lifecycle for preview environments
 type Manager struct {
 	client client.Client
@@ -42,9 +44,9 @@ type Manager struct {
 }
 
 // NewManager creates a new namespace manager
-func NewManager(client client.Client, scheme *runtime.Scheme) *Manager {
+func NewManager(c client.Client, scheme *runtime.Scheme) *Manager {
 	return &Manager{
-		client: client,
+		client: c,
 		scheme: scheme,
 	}
 }
@@ -68,7 +70,7 @@ func (m *Manager) EnsureNamespace(ctx context.Context, preview *previewv1alpha1.
 		}
 		ns.Labels["preview.previewd.io/pr"] = fmt.Sprintf("%d", preview.Spec.PRNumber)
 		ns.Labels["preview.previewd.io/repository"] = strings.ReplaceAll(preview.Spec.Repository, "/", "-")
-		ns.Labels["preview.previewd.io/managed-by"] = "previewd"
+		ns.Labels["preview.previewd.io/managed-by"] = managedByLabel
 
 		// Add annotations to track the owner (informational only)
 		if ns.Annotations == nil {
@@ -114,7 +116,7 @@ func (m *Manager) EnsureResourceQuota(ctx context.Context, preview *previewv1alp
 			quota.Labels = make(map[string]string)
 		}
 		quota.Labels["preview.previewd.io/pr"] = fmt.Sprintf("%d", preview.Spec.PRNumber)
-		quota.Labels["preview.previewd.io/managed-by"] = "previewd"
+		quota.Labels["preview.previewd.io/managed-by"] = managedByLabel
 
 		return nil
 	})
@@ -175,7 +177,7 @@ func (m *Manager) ensureDefaultDenyPolicy(ctx context.Context, preview *previewv
 			policy.Labels = make(map[string]string)
 		}
 		policy.Labels["preview.previewd.io/pr"] = fmt.Sprintf("%d", preview.Spec.PRNumber)
-		policy.Labels["preview.previewd.io/managed-by"] = "previewd"
+		policy.Labels["preview.previewd.io/managed-by"] = managedByLabel
 
 		return nil
 	})
@@ -229,7 +231,7 @@ func (m *Manager) ensureAllowIngressPolicy(ctx context.Context, preview *preview
 			policy.Labels = make(map[string]string)
 		}
 		policy.Labels["preview.previewd.io/pr"] = fmt.Sprintf("%d", preview.Spec.PRNumber)
-		policy.Labels["preview.previewd.io/managed-by"] = "previewd"
+		policy.Labels["preview.previewd.io/managed-by"] = managedByLabel
 
 		return nil
 	})
@@ -310,7 +312,7 @@ func (m *Manager) ensureAllowEgressPolicy(ctx context.Context, preview *previewv
 			policy.Labels = make(map[string]string)
 		}
 		policy.Labels["preview.previewd.io/pr"] = fmt.Sprintf("%d", preview.Spec.PRNumber)
-		policy.Labels["preview.previewd.io/managed-by"] = "previewd"
+		policy.Labels["preview.previewd.io/managed-by"] = managedByLabel
 
 		return nil
 	})

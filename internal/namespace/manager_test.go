@@ -32,11 +32,11 @@ import (
 
 func TestManager_EnsureNamespace(t *testing.T) {
 	tests := []struct {
-		name       string
+		validateFn func(t *testing.T, c client.Client, preview *previewv1alpha1.PreviewEnvironment)
 		preview    *previewv1alpha1.PreviewEnvironment
 		existingNS *corev1.Namespace
+		name       string
 		wantErr    bool
-		validateFn func(t *testing.T, c client.Client, preview *previewv1alpha1.PreviewEnvironment)
 	}{
 		{
 			name: "creates namespace with correct labels and owner reference",
@@ -67,8 +67,8 @@ func TestManager_EnsureNamespace(t *testing.T) {
 				if ns.Labels["preview.previewd.io/repository"] != "owner-repo" {
 					t.Errorf("expected repository label to be 'owner-repo', got %s", ns.Labels["preview.previewd.io/repository"])
 				}
-				if ns.Labels["preview.previewd.io/managed-by"] != "previewd" {
-					t.Errorf("expected managed-by label to be 'previewd', got %s", ns.Labels["preview.previewd.io/managed-by"])
+				if ns.Labels["preview.previewd.io/managed-by"] != managedByLabel {
+					t.Errorf("expected managed-by label to be %q, got %s", managedByLabel, ns.Labels["preview.previewd.io/managed-by"])
 				}
 
 				// Verify owner tracking via annotations (instead of owner references)
@@ -118,8 +118,12 @@ func TestManager_EnsureNamespace(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			scheme := runtime.NewScheme()
-			_ = previewv1alpha1.AddToScheme(scheme)
-			_ = corev1.AddToScheme(scheme)
+			if err := previewv1alpha1.AddToScheme(scheme); err != nil {
+				t.Fatalf("failed to add preview scheme: %v", err)
+			}
+			if err := corev1.AddToScheme(scheme); err != nil {
+				t.Fatalf("failed to add core scheme: %v", err)
+			}
 
 			var objs []client.Object
 			if tt.existingNS != nil {
@@ -148,11 +152,11 @@ func TestManager_EnsureNamespace(t *testing.T) {
 
 func TestManager_EnsureResourceQuota(t *testing.T) {
 	tests := []struct {
-		name       string
+		validateFn func(t *testing.T, c client.Client, namespace string)
 		preview    *previewv1alpha1.PreviewEnvironment
+		name       string
 		namespace  string
 		wantErr    bool
-		validateFn func(t *testing.T, c client.Client, namespace string)
 	}{
 		{
 			name: "creates resource quota with correct limits",
@@ -238,8 +242,12 @@ func TestManager_EnsureResourceQuota(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			scheme := runtime.NewScheme()
-			_ = previewv1alpha1.AddToScheme(scheme)
-			_ = corev1.AddToScheme(scheme)
+			if err := previewv1alpha1.AddToScheme(scheme); err != nil {
+				t.Fatalf("failed to add preview scheme: %v", err)
+			}
+			if err := corev1.AddToScheme(scheme); err != nil {
+				t.Fatalf("failed to add core scheme: %v", err)
+			}
 
 			// Create namespace first
 			ns := &corev1.Namespace{
@@ -268,13 +276,86 @@ func TestManager_EnsureResourceQuota(t *testing.T) {
 	}
 }
 
+func validateNetworkPolicies(t *testing.T, c client.Client, namespace string) {
+	// Check default-deny-all policy
+	defaultDeny := &networkingv1.NetworkPolicy{}
+	err := c.Get(context.Background(), types.NamespacedName{
+		Name:      "default-deny-all",
+		Namespace: namespace,
+	}, defaultDeny)
+	if err != nil {
+		t.Errorf("failed to get default-deny-all policy: %v", err)
+		return
+	}
+
+	// Verify it applies to all pods
+	if len(defaultDeny.Spec.PodSelector.MatchLabels) != 0 {
+		t.Errorf("default-deny-all should apply to all pods, got selector: %v", defaultDeny.Spec.PodSelector.MatchLabels)
+	}
+
+	// Check allow-ingress policy
+	allowIngress := &networkingv1.NetworkPolicy{}
+	err = c.Get(context.Background(), types.NamespacedName{
+		Name:      "allow-ingress",
+		Namespace: namespace,
+	}, allowIngress)
+	if err != nil {
+		t.Errorf("failed to get allow-ingress policy: %v", err)
+		return
+	}
+
+	// Verify ingress from ingress-nginx namespace
+	if len(allowIngress.Spec.Ingress) == 0 {
+		t.Errorf("allow-ingress should have ingress rules")
+		return
+	}
+
+	// Check that ingress is allowed from ingress-nginx namespace
+	validateIngressFromIngress(t, allowIngress)
+
+	// Check allow-egress policy
+	allowEgress := &networkingv1.NetworkPolicy{}
+	err = c.Get(context.Background(), types.NamespacedName{
+		Name:      "allow-egress",
+		Namespace: namespace,
+	}, allowEgress)
+	if err != nil {
+		t.Errorf("failed to get allow-egress policy: %v", err)
+		return
+	}
+
+	// Verify egress rules exist
+	if len(allowEgress.Spec.Egress) == 0 {
+		t.Errorf("allow-egress should have egress rules")
+	}
+}
+
+func validateIngressFromIngress(t *testing.T, allowIngress *networkingv1.NetworkPolicy) {
+	found := false
+	for _, rule := range allowIngress.Spec.Ingress {
+		for _, from := range rule.From {
+			if from.NamespaceSelector != nil &&
+				from.NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"] == "ingress-nginx" {
+				found = true
+				break
+			}
+		}
+		if found {
+			break
+		}
+	}
+	if !found {
+		t.Errorf("allow-ingress should allow traffic from ingress-nginx namespace")
+	}
+}
+
 func TestManager_EnsureNetworkPolicies(t *testing.T) {
 	tests := []struct {
-		name       string
+		validateFn func(t *testing.T, c client.Client, namespace string)
 		preview    *previewv1alpha1.PreviewEnvironment
+		name       string
 		namespace  string
 		wantErr    bool
-		validateFn func(t *testing.T, c client.Client, namespace string)
 	}{
 		{
 			name: "creates network policies with correct rules",
@@ -289,81 +370,23 @@ func TestManager_EnsureNetworkPolicies(t *testing.T) {
 					Repository: "owner/repo",
 				},
 			},
-			namespace: "preview-pr-555-65e817ee",
-			validateFn: func(t *testing.T, c client.Client, namespace string) {
-				// Check default-deny-all policy
-				defaultDeny := &networkingv1.NetworkPolicy{}
-				err := c.Get(context.Background(), types.NamespacedName{
-					Name:      "default-deny-all",
-					Namespace: namespace,
-				}, defaultDeny)
-				if err != nil {
-					t.Errorf("failed to get default-deny-all policy: %v", err)
-					return
-				}
-
-				// Verify it applies to all pods
-				if len(defaultDeny.Spec.PodSelector.MatchLabels) != 0 {
-					t.Errorf("default-deny-all should apply to all pods, got selector: %v", defaultDeny.Spec.PodSelector.MatchLabels)
-				}
-
-				// Check allow-ingress policy
-				allowIngress := &networkingv1.NetworkPolicy{}
-				err = c.Get(context.Background(), types.NamespacedName{
-					Name:      "allow-ingress",
-					Namespace: namespace,
-				}, allowIngress)
-				if err != nil {
-					t.Errorf("failed to get allow-ingress policy: %v", err)
-					return
-				}
-
-				// Verify ingress from ingress-nginx namespace
-				if len(allowIngress.Spec.Ingress) == 0 {
-					t.Errorf("allow-ingress should have ingress rules")
-					return
-				}
-
-				// Check that ingress is allowed from ingress-nginx namespace
-				found := false
-				for _, rule := range allowIngress.Spec.Ingress {
-					for _, from := range rule.From {
-						if from.NamespaceSelector != nil &&
-							from.NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"] == "ingress-nginx" {
-							found = true
-							break
-						}
-					}
-				}
-				if !found {
-					t.Errorf("allow-ingress should allow traffic from ingress-nginx namespace")
-				}
-
-				// Check allow-egress policy
-				allowEgress := &networkingv1.NetworkPolicy{}
-				err = c.Get(context.Background(), types.NamespacedName{
-					Name:      "allow-egress",
-					Namespace: namespace,
-				}, allowEgress)
-				if err != nil {
-					t.Errorf("failed to get allow-egress policy: %v", err)
-					return
-				}
-
-				// Verify egress rules exist
-				if len(allowEgress.Spec.Egress) == 0 {
-					t.Errorf("allow-egress should have egress rules")
-				}
-			},
+			namespace:  "preview-pr-555-65e817ee",
+			validateFn: validateNetworkPolicies,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			scheme := runtime.NewScheme()
-			_ = previewv1alpha1.AddToScheme(scheme)
-			_ = corev1.AddToScheme(scheme)
-			_ = networkingv1.AddToScheme(scheme)
+			if err := previewv1alpha1.AddToScheme(scheme); err != nil {
+				t.Fatalf("failed to add preview scheme: %v", err)
+			}
+			if err := corev1.AddToScheme(scheme); err != nil {
+				t.Fatalf("failed to add core scheme: %v", err)
+			}
+			if err := networkingv1.AddToScheme(scheme); err != nil {
+				t.Fatalf("failed to add networking scheme: %v", err)
+			}
 
 			// Create namespace first
 			ns := &corev1.Namespace{
@@ -394,11 +417,11 @@ func TestManager_EnsureNetworkPolicies(t *testing.T) {
 
 func TestManager_Cleanup(t *testing.T) {
 	tests := []struct {
-		name       string
-		preview    *previewv1alpha1.PreviewEnvironment
-		setupFn    func(c client.Client) error
-		wantErr    bool
 		validateFn func(t *testing.T, c client.Client, preview *previewv1alpha1.PreviewEnvironment)
+		setupFn    func(c client.Client) error
+		preview    *previewv1alpha1.PreviewEnvironment
+		name       string
+		wantErr    bool
 	}{
 		{
 			name: "deletes namespace when preview is deleted",
@@ -444,8 +467,12 @@ func TestManager_Cleanup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			scheme := runtime.NewScheme()
-			_ = previewv1alpha1.AddToScheme(scheme)
-			_ = corev1.AddToScheme(scheme)
+			if err := previewv1alpha1.AddToScheme(scheme); err != nil {
+				t.Fatalf("failed to add preview scheme: %v", err)
+			}
+			if err := corev1.AddToScheme(scheme); err != nil {
+				t.Fatalf("failed to add core scheme: %v", err)
+			}
 
 			c := fake.NewClientBuilder().
 				WithScheme(scheme).
@@ -475,9 +502,9 @@ func TestManager_Cleanup(t *testing.T) {
 // Helper function tests
 func TestGenerateNamespaceName(t *testing.T) {
 	tests := []struct {
-		prNumber int
 		repo     string
 		want     string
+		prNumber int
 	}{
 		{
 			prNumber: 123,
