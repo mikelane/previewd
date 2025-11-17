@@ -44,6 +44,13 @@ import (
 const (
 	// finalizerName is the finalizer used to prevent deletion until cleanup is complete
 	finalizerName = "preview.previewd.io/finalizer"
+
+	// defaultRequeueAfter is the default duration to requeue the reconciliation loop.
+	// This value controls how frequently the operator checks each PreviewEnvironment
+	// for state changes. Keep this reasonably large (minutes, not seconds) to avoid
+	// excessive API server load. Specific events (CR creation, deletion, etc.) will
+	// trigger immediate reconciliation via webhooks.
+	defaultRequeueAfter = 5 * time.Minute
 )
 
 // PreviewEnvironmentReconciler reconciles a PreviewEnvironment object
@@ -106,14 +113,26 @@ func (r *PreviewEnvironmentReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, err
 	}
 
+	// TODO(#3): Create namespace using namespace manager
+	// This will create a dedicated namespace for the preview environment
+	// with appropriate RBAC and resource quotas.
+
+	// TODO(#4): Deploy services via ArgoCD ApplicationSet
+	// Parse the repository and create an ArgoCD ApplicationSet that deploys
+	// services to the preview namespace based on the repository structure.
+
 	// Perform cost estimation after status is initialized
 	if err := r.estimateAndUpdateCosts(ctx, previewEnv); err != nil {
 		logger.Error(err, "Failed to estimate costs (non-fatal, will retry)")
 		// Log the error but don't fail - cost estimation is best-effort
 	}
 
-	// Requeue after 5 minutes for periodic reconciliation
-	return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+	// TODO(#5): Implement TTL-based expiration check and cleanup
+	// Check if the environment has exceeded its TTL (time-to-live) and
+	// trigger cleanup if necessary.
+
+	// Requeue after the default interval for periodic reconciliation
+	return ctrl.Result{RequeueAfter: defaultRequeueAfter}, nil
 }
 
 // handleDeletion performs cleanup when a PreviewEnvironment is being deleted

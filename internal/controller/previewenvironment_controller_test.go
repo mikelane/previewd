@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -577,5 +578,121 @@ var _ = Describe("PreviewEnvironment Controller", func() {
 					expectedReason: "Reconciling",
 				}),
 		)
+	})
+
+	Describe("Error path handling", func() {
+		const (
+			timeout  = time.Second * 10
+			interval = time.Millisecond * 250
+		)
+
+		Context("When reconciling with error conditions", func() {
+			const resourceName = "test-error-preview"
+
+			ctx := context.Background()
+
+			typeNamespacedName := types.NamespacedName{
+				Name:      resourceName,
+				Namespace: "default",
+			}
+
+			var previewenvironment *previewv1alpha1.PreviewEnvironment
+
+			BeforeEach(func() {
+				By("creating the custom resource for error testing")
+				previewenvironment = &previewv1alpha1.PreviewEnvironment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      resourceName,
+						Namespace: "default",
+					},
+					Spec: previewv1alpha1.PreviewEnvironmentSpec{
+						Repository: "owner/repo",
+						HeadSHA:    "1234567890abcdef1234567890abcdef12345678",
+						PRNumber:   123,
+						TTL:        "4h",
+					},
+				}
+				Expect(k8sClient.Create(ctx, previewenvironment)).To(Succeed())
+			})
+
+			AfterEach(func() {
+				// Clean up
+				resource := &previewv1alpha1.PreviewEnvironment{}
+				err := k8sClient.Get(ctx, typeNamespacedName, resource)
+				if err == nil {
+					By("Cleanup the specific resource instance PreviewEnvironment")
+					resource.Finalizers = []string{}
+					if updateErr := k8sClient.Update(ctx, resource); updateErr != nil && !apierrors.IsNotFound(updateErr) {
+						Expect(updateErr).NotTo(HaveOccurred())
+					}
+					if deleteErr := k8sClient.Delete(ctx, resource); deleteErr != nil && !apierrors.IsNotFound(deleteErr) {
+						Expect(deleteErr).NotTo(HaveOccurred())
+					}
+				} else if !apierrors.IsNotFound(err) {
+					Expect(err).NotTo(HaveOccurred())
+				}
+			})
+
+			It("handles reconciliation when resource doesn't exist", func() {
+				By("attempting to reconcile a non-existent resource")
+				controllerReconciler := &PreviewEnvironmentReconciler{
+					Client: k8sClient,
+					Scheme: k8sClient.Scheme(),
+				}
+
+				result, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      "definitely-does-not-exist",
+						Namespace: "default",
+					},
+				})
+
+				By("expecting no error (graceful handling of missing resources)")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).To(Equal(reconcile.Result{}))
+			})
+
+			It("handles reconciliation with successful finalizer updates", func() {
+				By("reconciling the created resource to add finalizer")
+				controllerReconciler := &PreviewEnvironmentReconciler{
+					Client: k8sClient,
+					Scheme: k8sClient.Scheme(),
+				}
+
+				result, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				})
+
+				By("expecting successful reconciliation with requeue")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.RequeueAfter).To(Equal(5 * time.Minute))
+
+				By("verifying finalizer was added")
+				updatedResource := &previewv1alpha1.PreviewEnvironment{}
+				Eventually(func() bool {
+					err := k8sClient.Get(ctx, typeNamespacedName, updatedResource)
+					if err != nil {
+						return false
+					}
+					return controllerutil.ContainsFinalizer(updatedResource, "preview.previewd.io/finalizer")
+				}, timeout, interval).Should(BeTrue())
+			})
+
+			It("uses defaultRequeueAfter constant for requeue duration", func() {
+				By("reconciling the created resource")
+				controllerReconciler := &PreviewEnvironmentReconciler{
+					Client: k8sClient,
+					Scheme: k8sClient.Scheme(),
+				}
+
+				result, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				})
+
+				By("verifying the result uses defaultRequeueAfter constant")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.RequeueAfter).To(Equal(5 * time.Minute))
+			})
+		})
 	})
 })
