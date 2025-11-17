@@ -34,10 +34,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 
 	previewv1alpha1 "github.com/mikelane/previewd/api/v1alpha1"
 	"github.com/mikelane/previewd/internal/cost"
@@ -192,9 +192,9 @@ func TestParseTTL(t *testing.T) {
 			want: 90 * time.Minute,
 		},
 		{
-			name:    "handles empty string",
-			ttl:     "",
-			want:    4 * time.Hour, // default
+			name: "handles empty string",
+			ttl:  "",
+			want: 4 * time.Hour, // default
 		},
 		{
 			name:    "handles invalid format",
@@ -219,9 +219,9 @@ func TestParseTTL(t *testing.T) {
 
 func TestCheckSpotInstance(t *testing.T) {
 	tests := []struct {
-		name      string
-		preview   *previewv1alpha1.PreviewEnvironment
-		wantSpot  bool
+		name     string
+		preview  *previewv1alpha1.PreviewEnvironment
+		wantSpot bool
 	}{
 		{
 			name: "detects spot instance annotation",
