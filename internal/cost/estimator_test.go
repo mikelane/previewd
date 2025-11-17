@@ -36,9 +36,9 @@ import (
 
 func TestNewEstimator(t *testing.T) {
 	tests := []struct {
-		want   *Config
-		config *Config
 		name   string
+		config *Config
+		want   *Config
 	}{
 		{
 			name: "creates estimator with default config",
@@ -91,10 +91,10 @@ func TestNewEstimator(t *testing.T) {
 
 func TestCalculatePodCost(t *testing.T) {
 	tests := []struct {
-		pod      *corev1.Pod
 		name     string
-		want     float64
+		pod      *corev1.Pod
 		duration time.Duration
+		want     float64
 		useSpot  bool
 	}{
 		{
@@ -243,13 +243,14 @@ func TestCalculatePodCost(t *testing.T) {
 
 func TestEstimateEnvironmentCost(t *testing.T) {
 	tests := []struct {
-		pods    []corev1.Pod
 		name    string
-		want    *v1alpha1.CostEstimate
+		pods    []corev1.Pod
 		ttl     time.Duration
+		want    *v1alpha1.CostEstimate
 		useSpot bool
 	}{
 		{
+			name: "estimates cost for single pod environment",
 			pods: []corev1.Pod{
 				{
 					Spec: corev1.PodSpec{
@@ -267,16 +268,16 @@ func TestEstimateEnvironmentCost(t *testing.T) {
 					},
 				},
 			},
-			name: "estimates cost for single pod environment",
+			ttl: 4 * time.Hour,
 			want: &v1alpha1.CostEstimate{
 				Currency:   "USD",
-				HourlyCost: "0.05",
-				TotalCost:  "0.20",
+				HourlyCost: "0.0500",
+				TotalCost:  "0.2000",
 			},
-			ttl:     4 * time.Hour,
 			useSpot: false,
 		},
 		{
+			name: "estimates cost for multi-pod environment",
 			pods: []corev1.Pod{
 				{
 					Spec: corev1.PodSpec{
@@ -324,16 +325,16 @@ func TestEstimateEnvironmentCost(t *testing.T) {
 					},
 				},
 			},
-			name: "estimates cost for multi-pod environment",
+			ttl: 8 * time.Hour,
 			want: &v1alpha1.CostEstimate{
 				Currency:   "USD",
-				HourlyCost: "0.18", // Total hourly: (0.5*0.04 + 1*0.005) + (1*0.04 + 2*0.005) + (2*0.04 + 4*0.005) = 0.025 + 0.05 + 0.1 = 0.175 rounded to 0.18
-				TotalCost:  "1.40", // 0.175 * 8 = 1.4
+				HourlyCost: "0.1750", // Total hourly: (0.5*0.04 + 1*0.005) + (1*0.04 + 2*0.005) + (2*0.04 + 4*0.005) = 0.025 + 0.05 + 0.1 = 0.175
+				TotalCost:  "1.4000", // 0.175 * 8 = 1.4
 			},
-			ttl:     8 * time.Hour,
 			useSpot: false,
 		},
 		{
+			name: "estimates cost with spot instances",
 			pods: []corev1.Pod{
 				{
 					Spec: corev1.PodSpec{
@@ -351,24 +352,23 @@ func TestEstimateEnvironmentCost(t *testing.T) {
 					},
 				},
 			},
-			name: "estimates cost with spot instances",
+			ttl: 24 * time.Hour,
 			want: &v1alpha1.CostEstimate{
 				Currency:   "USD",
-				HourlyCost: "0.07", // (2*0.04 + 4*0.005) * 0.7 = 0.1 * 0.7 = 0.07
-				TotalCost:  "1.68", // 0.07 * 24 = 1.68
+				HourlyCost: "0.0700", // (2*0.04 + 4*0.005) * 0.7 = 0.1 * 0.7 = 0.07
+				TotalCost:  "1.6800", // 0.07 * 24 = 1.68
 			},
-			ttl:     24 * time.Hour,
 			useSpot: true,
 		},
 		{
-			pods: []corev1.Pod{},
 			name: "handles empty pod list",
+			pods: []corev1.Pod{},
+			ttl:  4 * time.Hour,
 			want: &v1alpha1.CostEstimate{
 				Currency:   "USD",
-				HourlyCost: "0.00",
-				TotalCost:  "0.00",
+				HourlyCost: "0.0000",
+				TotalCost:  "0.0000",
 			},
-			ttl:     4 * time.Hour,
 			useSpot: false,
 		},
 	}
@@ -428,11 +428,11 @@ func TestTrackActualCost(t *testing.T) {
 	tests := []struct {
 		name      string
 		namespace string
+		pods      []corev1.Pod
 		startTime time.Time
 		endTime   time.Time
-		pods      []corev1.Pod
-		useSpot   bool
 		want      float64
+		useSpot   bool
 	}{
 		{
 			name:      "tracks actual cost for completed environment",
@@ -470,6 +470,100 @@ func TestTrackActualCost(t *testing.T) {
 			got := estimator.TrackActualCost(tt.namespace, tt.pods, duration, tt.useSpot)
 			if diff := abs(got - tt.want); diff > 0.001 {
 				t.Errorf("TrackActualCost() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestUpdateConfigConcurrency(t *testing.T) {
+	estimator := NewEstimator(nil)
+
+	// Create multiple configs to update concurrently
+	configs := []*Config{
+		{CPUCostPerHour: 0.05, MemoryCostPerHour: 0.006, SpotDiscount: 0.25, Currency: "USD"},
+		{CPUCostPerHour: 0.06, MemoryCostPerHour: 0.007, SpotDiscount: 0.35, Currency: "EUR"},
+		{CPUCostPerHour: 0.07, MemoryCostPerHour: 0.008, SpotDiscount: 0.45, Currency: "GBP"},
+		{CPUCostPerHour: 0.08, MemoryCostPerHour: 0.009, SpotDiscount: 0.55, Currency: "JPY"},
+	}
+
+	// Run concurrent updates
+	done := make(chan bool)
+	for i := 0; i < 100; i++ {
+		go func(iteration int) {
+			config := configs[iteration%len(configs)]
+			estimator.UpdateConfig(config)
+			// Also read config concurrently to test RLock
+			_ = estimator.GetConfig()
+			done <- true
+		}(i)
+	}
+
+	// Wait for all goroutines to complete
+	for i := 0; i < 100; i++ {
+		<-done
+	}
+
+	// Verify estimator still has a valid config
+	finalConfig := estimator.GetConfig()
+	if finalConfig == nil {
+		t.Fatal("GetConfig returned nil after concurrent updates")
+	}
+
+	// Check that final config is one of our test configs
+	validConfig := false
+	for _, cfg := range configs {
+		if finalConfig.CPUCostPerHour == cfg.CPUCostPerHour &&
+			finalConfig.MemoryCostPerHour == cfg.MemoryCostPerHour &&
+			finalConfig.SpotDiscount == cfg.SpotDiscount &&
+			finalConfig.Currency == cfg.Currency {
+			validConfig = true
+			break
+		}
+	}
+
+	if !validConfig {
+		t.Errorf("Final config does not match any test config: %+v", finalConfig)
+	}
+}
+
+func TestFormatCostVerySmall(t *testing.T) {
+	tests := []struct {
+		name string
+		cost float64
+		want string
+	}{
+		{
+			name: "formats cost less than $0.01",
+			cost: 0.0042,
+			want: "0.0042",
+		},
+		{
+			name: "formats cost less than $0.001",
+			cost: 0.0003,
+			want: "0.0003",
+		},
+		{
+			name: "formats cost close to zero",
+			cost: 0.00001,
+			want: "0.0000",
+		},
+		{
+			name: "formats exact zero",
+			cost: 0.0,
+			want: "0.0000",
+		},
+		{
+			name: "formats normal cost",
+			cost: 1.2345,
+			want: "1.2345",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := formatCost(tt.cost)
+			if got != tt.want {
+				t.Errorf("formatCost(%v) = %v, want %v", tt.cost, got, tt.want)
 			}
 		})
 	}

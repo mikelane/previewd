@@ -92,10 +92,6 @@ linters:
           - dupl
           - lll
         path: internal/*
-      - linters:
-          - govet
-        path: internal/cost/estimator.go
-        text: "fieldalignment"
       # Exclude test files from some linters
       - path: _test\.go
         linters:

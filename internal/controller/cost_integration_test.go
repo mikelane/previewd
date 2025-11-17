@@ -104,8 +104,8 @@ func TestReconciler_UpdatesCostEstimate(t *testing.T) {
 			name: "updates cost estimate for preview environment",
 			wantCost: &previewv1alpha1.CostEstimate{
 				Currency:   "USD",
-				HourlyCost: "0.05",
-				TotalCost:  "0.20",
+				HourlyCost: "0.0500",
+				TotalCost:  "0.2000",
 			},
 		},
 	}

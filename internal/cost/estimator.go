@@ -27,6 +27,7 @@ package cost
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/mikelane/previewd/api/v1alpha1"
@@ -36,14 +37,10 @@ import (
 
 // Config defines the pricing configuration for cost estimation
 type Config struct {
-	// CPUCostPerHour is the cost per vCPU hour in dollars
-	CPUCostPerHour float64
-	// MemoryCostPerHour is the cost per GB of memory per hour in dollars
+	Currency          string
+	CPUCostPerHour    float64
 	MemoryCostPerHour float64
-	// SpotDiscount is the discount applied to spot instances (0.3 = 30% discount)
-	SpotDiscount float64
-	// Currency is the currency code for cost estimates
-	Currency string
+	SpotDiscount      float64
 }
 
 // DefaultConfig returns the default pricing configuration
@@ -59,6 +56,7 @@ func DefaultConfig() *Config {
 // Estimator calculates costs for preview environments
 type Estimator struct {
 	config *Config
+	mu     sync.RWMutex
 }
 
 // NewEstimator creates a new cost estimator with the given configuration.
@@ -75,6 +73,9 @@ func NewEstimator(config *Config) *Estimator {
 // CalculatePodCost calculates the cost of running a pod for the specified duration.
 // If useSpot is true, spot instance pricing is applied.
 func (e *Estimator) CalculatePodCost(pod *corev1.Pod, duration time.Duration, useSpot bool) float64 {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
 	var totalCPU float64
 	var totalMemoryGB float64
 
@@ -150,19 +151,23 @@ func (e *Estimator) TrackActualCost(namespace string, pods []corev1.Pod, actualD
 	return totalCost
 }
 
-// formatCost formats a cost value as a string with 2 decimal places
+// formatCost formats a cost value as a string with 4 decimal places for transparency
 func formatCost(cost float64) string {
-	return fmt.Sprintf("%.2f", cost)
+	return fmt.Sprintf("%.4f", cost)
 }
 
 // GetConfig returns the current pricing configuration
 func (e *Estimator) GetConfig() *Config {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	return e.config
 }
 
 // UpdateConfig updates the pricing configuration
 func (e *Estimator) UpdateConfig(config *Config) {
 	if config != nil {
+		e.mu.Lock()
+		defer e.mu.Unlock()
 		e.config = config
 	}
 }
