@@ -39,27 +39,27 @@ type Client interface {
 
 // PullRequest represents GitHub pull request metadata
 type PullRequest struct {
-	Number      int
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 	Title       string
 	Description string
 	HeadSHA     string
 	BaseBranch  string
 	HeadBranch  string
 	Author      string
-	State       string // open, closed, merged
+	State       string
 	Labels      []string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	Number      int
 }
 
 // File represents a file changed in a pull request
 type File struct {
 	Filename  string
-	Status    string // added, removed, modified, renamed
+	Status    string
+	Patch     string
 	Additions int
 	Deletions int
 	Changes   int
-	Patch     string
 }
 
 // Status represents a commit status to be set on GitHub

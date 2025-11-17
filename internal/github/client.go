@@ -24,6 +24,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -146,7 +147,7 @@ func (c *githubClient) executeWithRetry(ctx context.Context, operation func() er
 	var lastErr error
 
 	for attempt := 0; attempt <= c.retryConfig.MaxRetries; attempt++ {
-		// Check if context is cancelled before attempting
+		// Check if context is canceled before attempting
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -191,8 +192,9 @@ func (c *githubClient) isRetryableError(err error) bool {
 		return false
 	}
 
-	// Check for GitHub API errors
-	if ghErr, ok := err.(*github.ErrorResponse); ok {
+	// Check for GitHub API errors using errors.As to handle wrapped errors
+	var ghErr *github.ErrorResponse
+	if errors.As(err, &ghErr) {
 		switch ghErr.Response.StatusCode {
 		case http.StatusTooManyRequests,
 			http.StatusBadGateway,
@@ -213,6 +215,7 @@ func (c *githubClient) isRetryableError(err error) bool {
 // calculateBackoff calculates the backoff duration for a retry attempt
 func (c *githubClient) calculateBackoff(attempt int) time.Duration {
 	// Exponential backoff with jitter
+	//nolint:gosec // G115: safe conversion - attempt is bounded by MaxRetries (<=3)
 	multiplier := 1 << uint(attempt) // 2^attempt
 	base := float64(c.retryConfig.InitialBackoff) * float64(multiplier)
 
