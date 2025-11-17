@@ -70,23 +70,26 @@ func TestNewClient(t *testing.T) {
 }
 
 // TestGetPullRequest tests fetching pull request metadata
+//
+//nolint:gocyclo // Complex test with multiple test cases
 func TestGetPullRequest(t *testing.T) {
 	tests := []struct {
+		mockError  error
+		mockPR     *github.PullRequest
+		wantPR     *PullRequest
 		name       string
 		owner      string
 		repo       string
-		number     int
-		mockPR     *github.PullRequest
-		mockError  error
-		wantPR     *PullRequest
-		wantError  bool
 		statusCode int
+		number     int
+		wantError  bool
 	}{
 		{
-			name:   "Successfully fetches pull request",
-			owner:  "mikelane",
-			repo:   "previewd",
-			number: 42,
+			statusCode: http.StatusOK,
+			name:       "Successfully fetches pull request",
+			owner:      "mikelane",
+			repo:       "previewd",
+			number:     42,
 			mockPR: &github.PullRequest{
 				Number: github.Int(42),
 				Title:  github.String("feat: add awesome feature"),
@@ -122,10 +125,10 @@ func TestGetPullRequest(t *testing.T) {
 				CreatedAt:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 				UpdatedAt:   time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
 			},
-			wantError:  false,
-			statusCode: http.StatusOK,
+			wantError: false,
 		},
 		{
+			statusCode: http.StatusNotFound,
 			name:       "Handles not found error",
 			owner:      "mikelane",
 			repo:       "previewd",
@@ -133,9 +136,9 @@ func TestGetPullRequest(t *testing.T) {
 			mockPR:     nil,
 			wantPR:     nil,
 			wantError:  true,
-			statusCode: http.StatusNotFound,
 		},
 		{
+			statusCode: http.StatusForbidden,
 			name:       "Handles rate limit error",
 			owner:      "mikelane",
 			repo:       "previewd",
@@ -143,7 +146,6 @@ func TestGetPullRequest(t *testing.T) {
 			mockPR:     nil,
 			wantPR:     nil,
 			wantError:  true,
-			statusCode: http.StatusForbidden,
 		},
 	}
 
@@ -158,15 +160,19 @@ func TestGetPullRequest(t *testing.T) {
 
 				if tt.statusCode != http.StatusOK {
 					w.WriteHeader(tt.statusCode)
-					if tt.statusCode == http.StatusForbidden {
+					switch tt.statusCode {
+					case http.StatusForbidden:
+						//nolint:errcheck,gosec // Test helper - write error is acceptable (G104)
 						w.Write([]byte(`{"message":"API rate limit exceeded"}`))
-					} else if tt.statusCode == http.StatusNotFound {
+					case http.StatusNotFound:
+						//nolint:errcheck,gosec // Test helper - write error is acceptable (G104)
 						w.Write([]byte(`{"message":"Not Found"}`))
 					}
 					return
 				}
 
 				w.WriteHeader(http.StatusOK)
+				//nolint:errcheck,gosec // Test helper - encode error is acceptable (G104)
 				json.NewEncoder(w).Encode(tt.mockPR)
 			}))
 			defer server.Close()
@@ -181,6 +187,7 @@ func TestGetPullRequest(t *testing.T) {
 					BackoffFactor:  2.0,
 				},
 			}
+			//nolint:errcheck,gosec // Test helper - error acceptable (G104) - parse error is acceptable for test server URL
 			client.client.BaseURL, _ = client.client.BaseURL.Parse(server.URL + "/")
 
 			// Execute test
@@ -218,25 +225,31 @@ func TestGetPullRequest(t *testing.T) {
 }
 
 // TestGetPRFiles tests fetching PR file changes
+//
+//nolint:gocyclo // Complex test with multiple test cases
 func TestGetPRFiles(t *testing.T) {
 	tests := []struct {
 		name       string
 		owner      string
 		repo       string
-		number     int
 		mockFiles  []*github.CommitFile
 		wantFiles  []*File
-		wantError  bool
 		statusCode int
 		page       int
 		perPage    int
+		number     int
+		wantError  bool
 		hasMore    bool
 	}{
 		{
-			name:   "Successfully fetches single page of files",
-			owner:  "mikelane",
-			repo:   "previewd",
-			number: 42,
+			statusCode: http.StatusOK,
+			page:       1,
+			perPage:    100,
+			hasMore:    false,
+			name:       "Successfully fetches single page of files",
+			owner:      "mikelane",
+			repo:       "previewd",
+			number:     42,
 			mockFiles: []*github.CommitFile{
 				{
 					Filename:  github.String("internal/github/client.go"),
@@ -273,13 +286,13 @@ func TestGetPRFiles(t *testing.T) {
 					Patch:     "@@ -0,0 +1,200 @@\n+package github\n+...",
 				},
 			},
-			wantError:  false,
+			wantError: false,
+		},
+		{
 			statusCode: http.StatusOK,
 			page:       1,
 			perPage:    100,
 			hasMore:    false,
-		},
-		{
 			name:       "Handles empty file list",
 			owner:      "mikelane",
 			repo:       "previewd",
@@ -287,12 +300,9 @@ func TestGetPRFiles(t *testing.T) {
 			mockFiles:  []*github.CommitFile{},
 			wantFiles:  []*File{},
 			wantError:  false,
-			statusCode: http.StatusOK,
-			page:       1,
-			perPage:    100,
-			hasMore:    false,
 		},
 		{
+			statusCode: http.StatusNotFound,
 			name:       "Handles error response",
 			owner:      "mikelane",
 			repo:       "previewd",
@@ -300,7 +310,6 @@ func TestGetPRFiles(t *testing.T) {
 			mockFiles:  nil,
 			wantFiles:  nil,
 			wantError:  true,
-			statusCode: http.StatusNotFound,
 		},
 	}
 
@@ -318,6 +327,7 @@ func TestGetPRFiles(t *testing.T) {
 				if tt.statusCode != http.StatusOK {
 					w.WriteHeader(tt.statusCode)
 					if tt.statusCode == http.StatusNotFound {
+						//nolint:errcheck,gosec // Test helper - error acceptable (G104) - write error is acceptable
 						w.Write([]byte(`{"message":"Not Found"}`))
 					}
 					return
@@ -329,6 +339,7 @@ func TestGetPRFiles(t *testing.T) {
 				}
 
 				w.WriteHeader(http.StatusOK)
+				//nolint:errcheck,gosec // Test helper - error acceptable (G104) - encode error is acceptable
 				json.NewEncoder(w).Encode(tt.mockFiles)
 			}))
 			defer server.Close()
@@ -343,6 +354,7 @@ func TestGetPRFiles(t *testing.T) {
 					BackoffFactor:  2.0,
 				},
 			}
+			//nolint:errcheck,gosec // Test helper - error acceptable (G104) - parse error is acceptable for test server URL
 			client.client.BaseURL, _ = client.client.BaseURL.Parse(server.URL + "/")
 
 			// Execute test
@@ -383,69 +395,71 @@ func TestGetPRFiles(t *testing.T) {
 }
 
 // TestUpdateCommitStatus tests updating commit status
+//
+//nolint:gocyclo // Complex test with multiple test cases
 func TestUpdateCommitStatus(t *testing.T) {
 	tests := []struct {
+		status     *Status
 		name       string
 		owner      string
 		repo       string
 		sha        string
-		status     *Status
-		wantError  bool
 		statusCode int
+		wantError  bool
 	}{
 		{
-			name:  "Successfully updates commit status",
-			owner: "mikelane",
-			repo:  "previewd",
-			sha:   "abc123def456",
+			statusCode: http.StatusCreated,
+			name:       "Successfully updates commit status",
+			owner:      "mikelane",
+			repo:       "previewd",
+			sha:        "abc123def456",
 			status: &Status{
 				State:       StatusStatePending,
 				TargetURL:   "https://preview.example.com/pr-42",
 				Description: "Creating preview environment",
 				Context:     "previewd/environment",
 			},
-			wantError:  false,
-			statusCode: http.StatusCreated,
+			wantError: false,
 		},
 		{
-			name:  "Updates success status",
-			owner: "mikelane",
-			repo:  "previewd",
-			sha:   "def456ghi789",
+			statusCode: http.StatusCreated,
+			name:       "Updates success status",
+			owner:      "mikelane",
+			repo:       "previewd",
+			sha:        "def456ghi789",
 			status: &Status{
 				State:       StatusStateSuccess,
 				TargetURL:   "https://preview.example.com/pr-43",
 				Description: "Preview environment ready",
 				Context:     "previewd/environment",
 			},
-			wantError:  false,
-			statusCode: http.StatusCreated,
+			wantError: false,
 		},
 		{
-			name:  "Handles unauthorized error",
-			owner: "mikelane",
-			repo:  "previewd",
-			sha:   "invalid",
+			statusCode: http.StatusUnauthorized,
+			name:       "Handles unauthorized error",
+			owner:      "mikelane",
+			repo:       "previewd",
+			sha:        "invalid",
 			status: &Status{
 				State:       StatusStateError,
 				Description: "Failed",
 				Context:     "previewd/environment",
 			},
-			wantError:  true,
-			statusCode: http.StatusUnauthorized,
+			wantError: true,
 		},
 		{
-			name:  "Handles not found error",
-			owner: "mikelane",
-			repo:  "previewd",
-			sha:   "nonexistent",
+			statusCode: http.StatusNotFound,
+			name:       "Handles not found error",
+			owner:      "mikelane",
+			repo:       "previewd",
+			sha:        "nonexistent",
 			status: &Status{
 				State:       StatusStateFailure,
 				Description: "Failed",
 				Context:     "previewd/environment",
 			},
-			wantError:  true,
-			statusCode: http.StatusNotFound,
+			wantError: true,
 		},
 	}
 
@@ -470,15 +484,19 @@ func TestUpdateCommitStatus(t *testing.T) {
 
 				if tt.statusCode != http.StatusCreated {
 					w.WriteHeader(tt.statusCode)
-					if tt.statusCode == http.StatusUnauthorized {
+					switch tt.statusCode {
+					case http.StatusUnauthorized:
+						//nolint:errcheck,gosec // Test helper - error acceptable (G104) - write error is acceptable
 						w.Write([]byte(`{"message":"Bad credentials"}`))
-					} else if tt.statusCode == http.StatusNotFound {
+					case http.StatusNotFound:
+						//nolint:errcheck,gosec // Test helper - write error is acceptable (G104)
 						w.Write([]byte(`{"message":"Not Found"}`))
 					}
 					return
 				}
 
 				w.WriteHeader(http.StatusCreated)
+				//nolint:errcheck,gosec // Test helper - error acceptable (G104) - write error is acceptable
 				w.Write([]byte(`{"state":"` + string(tt.status.State) + `","context":"` + tt.status.Context + `"}`))
 			}))
 			defer server.Close()
@@ -493,6 +511,7 @@ func TestUpdateCommitStatus(t *testing.T) {
 					BackoffFactor:  2.0,
 				},
 			}
+			//nolint:errcheck,gosec // Test helper - error acceptable (G104) - parse error is acceptable for test server URL
 			client.client.BaseURL, _ = client.client.BaseURL.Parse(server.URL + "/")
 
 			// Execute test
@@ -521,7 +540,8 @@ func TestGetPRFilesPagination(t *testing.T) {
 		pageCount++
 
 		// Simulate 3 pages of results
-		if pageCount == 1 {
+		switch pageCount {
+		case 1:
 			w.Header().Set("Link", fmt.Sprintf(`<http://api.github.com/repos/%s/%s/pulls/%d/files?page=2>; rel="next"`, owner, repo, number))
 			files := []*github.CommitFile{
 				{
@@ -532,8 +552,9 @@ func TestGetPRFilesPagination(t *testing.T) {
 					Changes:   github.Int(10),
 				},
 			}
+			//nolint:errcheck,gosec // Test helper - error acceptable (G104) - encode error is acceptable
 			json.NewEncoder(w).Encode(files)
-		} else if pageCount == 2 {
+		case 2:
 			w.Header().Set("Link", fmt.Sprintf(`<http://api.github.com/repos/%s/%s/pulls/%d/files?page=3>; rel="next"`, owner, repo, number))
 			files := []*github.CommitFile{
 				{
@@ -544,8 +565,9 @@ func TestGetPRFilesPagination(t *testing.T) {
 					Changes:   github.Int(8),
 				},
 			}
+			//nolint:errcheck,gosec // Test helper - error acceptable (G104) - encode error is acceptable
 			json.NewEncoder(w).Encode(files)
-		} else if pageCount == 3 {
+		case 3:
 			// Last page, no Link header
 			files := []*github.CommitFile{
 				{
@@ -556,8 +578,9 @@ func TestGetPRFilesPagination(t *testing.T) {
 					Changes:   github.Int(20),
 				},
 			}
+			//nolint:errcheck,gosec // Test helper - error acceptable (G104) - encode error is acceptable
 			json.NewEncoder(w).Encode(files)
-		} else {
+		default:
 			t.Errorf("Unexpected page request: %d", pageCount)
 			w.WriteHeader(http.StatusInternalServerError)
 		}
@@ -574,6 +597,7 @@ func TestGetPRFilesPagination(t *testing.T) {
 			BackoffFactor:  2.0,
 		},
 	}
+	//nolint:errcheck,gosec // Test helper - error acceptable (G104) - parse error is acceptable for test server URL
 	client.client.BaseURL, _ = client.client.BaseURL.Parse(server.URL + "/")
 
 	// Execute test

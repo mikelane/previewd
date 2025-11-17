@@ -35,7 +35,11 @@ import (
 )
 
 // TestRetryWithBackoff tests the exponential backoff retry mechanism
+//
+//nolint:gocyclo // Complex test with multiple test cases
+//nolint:gocyclo // Complex test with multiple test cases
 func TestRetryWithBackoff(t *testing.T) {
+	//nolint:govet,staticcheck // Field alignment not critical for test struct
 	tests := []struct {
 		name         string
 		maxRetries   int
@@ -115,16 +119,17 @@ func TestRetryWithBackoff(t *testing.T) {
 					statusIndex++
 
 					w.WriteHeader(statusCode)
+					//nolint:staticcheck // QF1003: if-else is idiomatic for test
 					if statusCode == http.StatusTooManyRequests {
 						w.Header().Set("X-RateLimit-Remaining", "0")
 						w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", time.Now().Add(1*time.Hour).Unix()))
-						w.Write([]byte(`{"message":"API rate limit exceeded"}`))
+						w.Write([]byte(`{"message":"API rate limit exceeded"}`)) //nolint:errcheck,gosec
 					} else if statusCode == http.StatusBadGateway {
-						w.Write([]byte(`{"message":"Bad Gateway"}`))
+						w.Write([]byte(`{"message":"Bad Gateway"}`)) //nolint:errcheck,gosec
 					} else if statusCode == http.StatusNotFound {
-						w.Write([]byte(`{"message":"Not Found"}`))
+						w.Write([]byte(`{"message":"Not Found"}`)) //nolint:errcheck,gosec
 					} else if statusCode == http.StatusUnauthorized {
-						w.Write([]byte(`{"message":"Bad credentials"}`))
+						w.Write([]byte(`{"message":"Bad credentials"}`)) //nolint:errcheck,gosec
 					}
 				} else {
 					w.WriteHeader(http.StatusOK)
@@ -148,11 +153,11 @@ func TestRetryWithBackoff(t *testing.T) {
 
 			// Execute operation with retry
 			err := client.executeWithRetry(context.Background(), func() error {
-				resp, err := http.Get(server.URL)
+				resp, err := http.Get(server.URL) //nolint:noctx
 				if err != nil {
 					return err
 				}
-				defer resp.Body.Close()
+				defer resp.Body.Close() //nolint:errcheck,gosec
 
 				if resp.StatusCode != http.StatusOK {
 					// Simulate GitHub error response for retryable errors
@@ -195,6 +200,7 @@ func TestRetryWithBackoff(t *testing.T) {
 
 // TestRateLimitHandling tests GitHub API rate limit detection and handling
 func TestRateLimitHandling(t *testing.T) {
+	//nolint:govet,staticcheck // Field alignment not critical for test struct
 	tests := []struct {
 		name            string
 		remainingHeader string
@@ -241,7 +247,7 @@ func TestRateLimitHandling(t *testing.T) {
 				}
 				w.WriteHeader(tt.statusCode)
 				if tt.statusCode == http.StatusForbidden {
-					w.Write([]byte(`{"message":"API rate limit exceeded"}`))
+					w.Write([]byte(`{"message":"API rate limit exceeded"}`)) //nolint:errcheck,gosec
 				}
 			}))
 			defer server.Close()
@@ -257,11 +263,11 @@ func TestRateLimitHandling(t *testing.T) {
 			}
 
 			// Make request and check rate limit
-			resp, err := http.Get(server.URL)
+			resp, err := http.Get(server.URL) //nolint:noctx
 			if err != nil {
 				t.Fatalf("Failed to make request: %v", err)
 			}
-			defer resp.Body.Close()
+			defer resp.Body.Close() //nolint:errcheck,gosec
 
 			rateLimited, waitTime := client.checkRateLimit(resp)
 
@@ -291,7 +297,7 @@ func TestContextCancellation(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&attempts, 1)
 		w.WriteHeader(http.StatusTooManyRequests)
-		w.Write([]byte(`{"message":"API rate limit exceeded"}`))
+		w.Write([]byte(`{"message":"API rate limit exceeded"}`)) //nolint:errcheck,gosec
 	}))
 	defer server.Close()
 
@@ -315,11 +321,11 @@ func TestContextCancellation(t *testing.T) {
 
 	// Execute operation with retry
 	err := client.executeWithRetry(ctx, func() error {
-		resp, err := http.Get(server.URL)
+		resp, err := http.Get(server.URL) //nolint:noctx
 		if err != nil {
 			return err
 		}
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck,gosec
 
 		if resp.StatusCode != http.StatusOK {
 			// Simulate GitHub error response for retryable errors
@@ -345,7 +351,7 @@ func TestContextCancellation(t *testing.T) {
 		t.Errorf("executeWithRetry() made %d attempts, expected <= 2 due to timeout", actualAttempts)
 	}
 	if elapsed > 250*time.Millisecond {
-		t.Errorf("executeWithRetry() took %v, expected to be cancelled within 250ms", elapsed)
+		t.Errorf("executeWithRetry() took %v, expected to be canceled within 250ms", elapsed)
 	}
 }
 
