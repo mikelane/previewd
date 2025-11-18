@@ -5,6 +5,18 @@
     },
     {
       "pattern": "^http://127.0.0.1"
+    },
+    {
+      "pattern": "^https://img.shields.io"
+    },
+    {
+      "pattern": "^https://opensource.org"
+    },
+    {
+      "pattern": "^https://opengitops.dev"
+    },
+    {
+      "pattern": "^https://aquasecurity.github.io"
     }
   ],
   "replacementPatterns": [],
