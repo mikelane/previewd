@@ -31,39 +31,51 @@ import (
 
 // PreviewEnvironmentSpec defines the desired state of PreviewEnvironment
 type PreviewEnvironmentSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
-
-	// Repository is the GitHub repository in "owner/repo" format
-	// +kubebuilder:validation:Pattern="^[a-zA-Z0-9-]+/[a-zA-Z0-9-]+$"
-	Repository string `json:"repository"`
-
-	// HeadSHA is the commit SHA of the PR head (40 character hex string)
-	// +kubebuilder:validation:Pattern="^[a-f0-9]{40}$"
-	HeadSHA string `json:"headSHA"`
-
-	// BaseBranch is the base branch name (optional)
-	// +optional
-	BaseBranch string `json:"baseBranch,omitempty"`
-
-	// HeadBranch is the head branch name (optional)
-	// +optional
-	HeadBranch string `json:"headBranch,omitempty"`
-
-	// TTL is the time-to-live duration for the preview environment
-	// +kubebuilder:default="4h"
-	// +optional
-	TTL string `json:"ttl,omitempty"`
-
-	// Services is a list of service names to deploy (optional)
+	// Services is the list of services to deploy in the preview environment
 	// +optional
 	Services []string `json:"services,omitempty"`
 
+	// Repository is the GitHub repository (format: "owner/repo" or "https://github.com/owner/repo")
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^([a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+|https://github\.com/[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+)$`
+	Repository string `json:"repository"`
+
+	// HeadSHA is the git commit SHA of the PR head (40-character hex string)
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^[0-9a-f]{40}$`
+	HeadSHA string `json:"headSHA"`
+
+	// ResourceQuota defines resource limits for the preview environment namespace
+	// +optional
+	ResourceQuota *ResourceQuotaSpec `json:"resourceQuota,omitempty"`
+
+	// IngressPort is the port for ingress controller (default: 80)
+	// +optional
+	IngressPort *int32 `json:"ingressPort,omitempty"`
+
 	// PRNumber is the pull request number
+	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Minimum=1
 	PRNumber int `json:"prNumber"`
+}
+
+// ResourceQuotaSpec defines resource quota limits for a preview environment
+type ResourceQuotaSpec struct {
+	// RequestsCPU is the CPU requests limit (default: "2")
+	// +optional
+	RequestsCPU string `json:"requestsCpu,omitempty"`
+
+	// LimitsCPU is the CPU limits (default: "4")
+	// +optional
+	LimitsCPU string `json:"limitsCpu,omitempty"`
+
+	// RequestsMemory is the memory requests limit (default: "4Gi")
+	// +optional
+	RequestsMemory string `json:"requestsMemory,omitempty"`
+
+	// LimitsMemory is the memory limits (default: "8Gi")
+	// +optional
+	LimitsMemory string `json:"limitsMemory,omitempty"`
 }
 
 // PreviewEnvironmentStatus defines the observed state of PreviewEnvironment.
@@ -163,19 +175,10 @@ type CostEstimate struct {
 
 // PreviewEnvironment is the Schema for the previewenvironments API
 type PreviewEnvironment struct {
-	metav1.TypeMeta `json:",inline"`
-
-	// metadata is a standard object metadata
-	// +optional
+	Spec              PreviewEnvironmentSpec `json:"spec"`
+	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty,omitzero"`
-
-	// status defines the observed state of PreviewEnvironment
-	// +optional
-	Status PreviewEnvironmentStatus `json:"status,omitempty,omitzero"`
-
-	// spec defines the desired state of PreviewEnvironment
-	// +required
-	Spec PreviewEnvironmentSpec `json:"spec"`
+	Status            PreviewEnvironmentStatus `json:"status,omitempty,omitzero"`
 }
 
 // +kubebuilder:object:root=true

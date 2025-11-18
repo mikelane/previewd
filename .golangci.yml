@@ -114,6 +114,11 @@ linters:
       - source: "^//\\+kubebuilder"
         linters:
           - lll
+      # fieldalignment: API types have pragmatic field layouts with optional fields
+      - linters:
+          - govet
+        path: api/.*\.go
+        text: "fieldalignment"
     paths:
       - third_party$
       - builtin$
