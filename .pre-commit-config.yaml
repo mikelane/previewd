@@ -1,0 +1,47 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: mixed-line-ending
+
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: gofmt
+        entry: bash -c 'if [ -n "$(gofmt -l . --exclude="zz_generated.*")" ]; then echo "Files need formatting:"; gofmt -l .; exit 1; fi'
+        language: system
+        types: [go]
+        pass_filenames: false
+        exclude: |
+          (?x)^(
+            api/v1alpha1/zz_generated\..*
+          )$
+
+      - id: goimports
+        name: goimports
+        entry: bash -c 'if [ -n "$(goimports -l . 2>/dev/null | grep -v zz_generated)" ]; then echo "Files have import issues:"; goimports -l . 2>/dev/null | grep -v zz_generated; exit 1; fi'
+        language: system
+        types: [go]
+        pass_filenames: false
+        exclude: |
+          (?x)^(
+            api/v1alpha1/zz_generated\..*
+          )$
+
+      - id: go-vet
+        name: go vet
+        entry: go vet ./...
+        language: system
+        types: [go]
+        pass_filenames: false
+
+      - id: golangci-lint
+        name: golangci-lint
+        entry: golangci-lint run --timeout=5m
+        language: system
+        types: [go]
+        pass_filenames: false

@@ -56,9 +56,11 @@ jobs:
 
       - name: Check gofmt
         run: |
-          if [ -n "$(gofmt -l .)" ]; then
+          # Exclude generated files from format check
+          FILES=$(gofmt -l . | grep -v 'zz_generated')
+          if [ -n "$FILES" ]; then
             echo "The following files are not formatted:"
-            gofmt -l .
+            echo "$FILES"
             echo "Run 'gofmt -w .' to fix formatting."
             exit 1
           fi
@@ -66,12 +68,48 @@ jobs:
       - name: Check goimports
         run: |
           go install golang.org/x/tools/cmd/goimports@latest
-          if [ -n "$(goimports -l .)" ]; then
+          # Exclude generated files from import check
+          FILES=$(goimports -l . 2>/dev/null | grep -v 'zz_generated')
+          if [ -n "$FILES" ]; then
             echo "The following files have import issues:"
-            goimports -l .
+            echo "$FILES"
             echo "Run 'goimports -w .' to fix imports."
             exit 1
           fi
+
+  # Pre-commit hooks validation
+  pre-commit:
+    name: Pre-commit Hooks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Install Go tools
+        run: |
+          go install golang.org/x/tools/cmd/goimports@latest
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.4.0
+
+      - name: Run pre-commit hooks
+        run: pre-commit run --all-files
 
   # Static analysis
   static-analysis:
@@ -486,6 +524,7 @@ jobs:
     needs:
       - lint
       - format
+      - pre-commit
       - static-analysis
       - security
       - vulnerability-scan

@@ -25,4 +25,3 @@ resources:
 - previewenvironment_admin_role.yaml
 - previewenvironment_editor_role.yaml
 - previewenvironment_viewer_role.yaml
-
