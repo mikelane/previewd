@@ -132,98 +132,7 @@ var _ = Describe("PreviewEnvironment", func() {
 		})
 	})
 
-	Context("TTL field", func() {
-		It("defaults to 4h when not provided", func() {
-			preview := &PreviewEnvironment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "ttl-default-test",
-					Namespace: "default",
-				},
-				Spec: PreviewEnvironmentSpec{
-					Repository: "owner/repo",
-					PRNumber:   123,
-					HeadSHA:    "abc1234567890def1234567890abc12345678901",
-				},
-			}
-
-			// Create the resource
-			err := k8sClient.Create(ctx, preview)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Fetch it back
-			fetched := &PreviewEnvironment{}
-			err = k8sClient.Get(ctx, client.ObjectKeyFromObject(preview), fetched)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Verify TTL is set to default
-			Expect(fetched.Spec.TTL).To(Equal("4h"))
-
-			// Cleanup
-			err = k8sClient.Delete(ctx, preview)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("accepts custom TTL when provided", func() {
-			preview := &PreviewEnvironment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "ttl-custom-test",
-					Namespace: "default",
-				},
-				Spec: PreviewEnvironmentSpec{
-					Repository: "owner/repo",
-					PRNumber:   123,
-					HeadSHA:    "1234567890abcdef1234567890abcdef12345678",
-					TTL:        "8h",
-				},
-			}
-
-			err := k8sClient.Create(ctx, preview)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Verify TTL is the custom value
-			Expect(preview.Spec.TTL).To(Equal("8h"))
-
-			// Cleanup
-			err = k8sClient.Delete(ctx, preview)
-			Expect(err).NotTo(HaveOccurred())
-		})
-	})
-
 	Context("Optional fields", func() {
-		It("accepts BaseBranch when provided", func() {
-			preview := &PreviewEnvironment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "basebranch-test",
-					Namespace: "default",
-				},
-				Spec: PreviewEnvironmentSpec{
-					Repository: "owner/repo",
-					PRNumber:   123,
-					HeadSHA:    "1234567890abcdef1234567890abcdef12345678",
-					BaseBranch: "main",
-				},
-			}
-
-			Expect(preview.Spec.BaseBranch).To(Equal("main"))
-		})
-
-		It("accepts HeadBranch when provided", func() {
-			preview := &PreviewEnvironment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "headbranch-test",
-					Namespace: "default",
-				},
-				Spec: PreviewEnvironmentSpec{
-					Repository: "owner/repo",
-					PRNumber:   123,
-					HeadSHA:    "1234567890abcdef1234567890abcdef12345678",
-					HeadBranch: "feature/test",
-				},
-			}
-
-			Expect(preview.Spec.HeadBranch).To(Equal("feature/test"))
-		})
-
 		It("accepts Services slice when provided", func() {
 			preview := &PreviewEnvironment{
 				ObjectMeta: metav1.ObjectMeta{
@@ -354,7 +263,6 @@ var _ = Describe("PreviewEnvironment", func() {
 			Expect(fetched.Spec.Repository).To(Equal("myorg/myrepo"))
 			Expect(fetched.Spec.PRNumber).To(Equal(123))
 			Expect(fetched.Spec.HeadSHA).To(Equal("1234567890abcdef1234567890abcdef12345678"))
-			Expect(fetched.Spec.TTL).To(Equal("4h")) // Default
 
 			// Cleanup
 			err = k8sClient.Delete(ctx, preview)
@@ -452,10 +360,7 @@ var _ = Describe("PreviewEnvironment", func() {
 				Repository: "owner/repo",
 				PRNumber:   123,
 				HeadSHA:    "1234567890abcdef1234567890abcdef12345678",
-				BaseBranch: "main",
-				HeadBranch: "feature",
 				Services:   []string{"api", "web"},
-				TTL:        "4h",
 			}
 
 			copied := original.DeepCopy()
