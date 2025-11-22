@@ -77,40 +77,6 @@ jobs:
             exit 1
           fi
 
-  # Pre-commit hooks validation
-  pre-commit:
-    name: Pre-commit Hooks
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
-      - name: Install pre-commit
-        run: pip install pre-commit
-
-      - name: Install Go tools
-        run: |
-          go install golang.org/x/tools/cmd/goimports@latest
-          echo "$HOME/go/bin" >> $GITHUB_PATH
-
-      - name: Install golangci-lint
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.4.0
-
-      - name: Run pre-commit hooks
-        run: pre-commit run --all-files
-
   # Static analysis
   static-analysis:
     name: Static Analysis
@@ -524,7 +490,6 @@ jobs:
     needs:
       - lint
       - format
-      - pre-commit
       - static-analysis
       - security
       - vulnerability-scan
