@@ -73,30 +73,40 @@ See [ROADMAP.md](ROADMAP.md) for detailed timeline.
 ## Architecture Overview
 
 ```mermaid
-graph TB
-    subgraph "Previewd Operator"
-        GH[GitHub Webhook Handler]
-        AI[AI Engine<br/>Code Analysis]
-        DG[Data Generator<br/>Synthetic Data]
+%%{init: {'theme': 'base', 'themeVariables': {
+  'primaryColor': '#2e78f0',
+  'primaryTextColor': '#fff',
+  'primaryBorderColor': '#1e60d4',
+  'lineColor': '#64748b',
+  'secondaryColor': '#f1f5f9'
+}}}%%
 
-        GH --> RL[Reconciliation Loop]
+flowchart TD
+    subgraph Operator["Previewd Operator"]
+        direction TB
+        GH[GitHub Webhook<br/>Handler]:::integration
+        AI[AI Engine<br/>Code Analysis]:::ai
+        DG[Data Generator<br/>Synthetic Data]:::ai
+
+        GH --> RL[Reconciliation Loop]:::core
         AI --> RL
         DG --> RL
 
-        RL --> EC[Environment Controller]
-        RL --> ARGO[ArgoCD Integration]
-        RL --> CO[Cost Optimizer]
+        RL --> EC[Environment<br/>Controller]:::core
+        RL --> ARGO[ArgoCD<br/>Integration]:::integration
+        RL --> CO[Cost<br/>Optimizer]:::core
     end
 
-    EC --> K8S[Kubernetes Cluster]
+    EC --> K8S[(Kubernetes<br/>Cluster)]:::external
     ARGO --> K8S
     CO --> K8S
 
-    style GH fill:#4CAF50
-    style AI fill:#2196F3
-    style DG fill:#FF9800
-    style RL fill:#9C27B0
-    style K8S fill:#326CE5
+    style Operator fill:#e0f2fe,stroke:#0ea5e9,stroke-width:3px,rx:8,ry:8
+
+    classDef core fill:#2e78f0,stroke:#1e60d4,color:#fff,stroke-width:2px,rx:8,ry:8
+    classDef ai fill:#a855f7,stroke:#7e22ce,color:#fff,stroke-width:2px,rx:8,ry:8
+    classDef integration fill:#10b981,stroke:#059669,color:#fff,stroke-width:2px,rx:8,ry:8
+    classDef external fill:#64748b,stroke:#475569,color:#fff,stroke-width:2px,rx:8,ry:8
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design.
