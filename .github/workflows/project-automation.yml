@@ -44,23 +44,11 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: pr.number,
-              body: `## 🤖 Workflow Automation
-
-This PR has been moved to **Code Review** stage on the project board.
-
-**Next Steps:**
-1. ✅ Automated checks must pass
-2. 👀 Code review approval required
-3. 🧪 QA review required
-4. 🚀 SRE review (if infrastructure changes)
-
-See [CONTRIBUTING.md](../CONTRIBUTING.md#pull-request-process) for details.`
+              body: `## 🤖 Workflow Automation\n\nThis PR has been moved to **Code Review** stage on the project board.\n\n**Next Steps:**\n1. ✅ Automated checks must pass\n2. 👀 Code review approval required\n3. 🧪 QA review required\n4. 🚀 SRE review (if infrastructure changes)\n\nSee [CONTRIBUTING.md](../CONTRIBUTING.md#pull-request-process) for details.`
             });
 
       - name: Move to QA Review when code approved
-        if: |
-          github.event_name == 'pull_request_review' &&
-          github.event.review.state == 'approved'
+        if: github.event_name == 'pull_request_review' && github.event.review.state == 'approved'
         uses: actions/github-script@v7
         with:
           script: |
@@ -86,17 +74,7 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md#pull-request-process) for details.`
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: pr.number,
-              body: `## ✅ Code Review Approved
-
-Moving to **QA Review** stage.
-
-@mikelane - Please perform QA validation:
-- Run full test suite
-- Security audit
-- Validate acceptance criteria
-- Test edge cases
-
-See [PRODUCT_LIFECYCLE.md](../docs/PRODUCT_LIFECYCLE.md#6-qa-review) for QA checklist.`
+              body: `## ✅ Code Review Approved\n\nMoving to **QA Review** stage.\n\n@mikelane - Please perform QA validation:\n- Run full test suite\n- Security audit\n- Validate acceptance criteria\n- Test edge cases\n\nSee [PRODUCT_LIFECYCLE.md](../docs/PRODUCT_LIFECYCLE.md#6-qa-review) for QA checklist.`
             });
 
       - name: Auto-close linked issues when PR merged
