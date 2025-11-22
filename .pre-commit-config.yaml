@@ -12,7 +12,7 @@ repos:
     hooks:
       - id: gofmt
         name: gofmt
-        entry: bash -c 'if [ -n "$(gofmt -l . --exclude="zz_generated.*")" ]; then echo "Files need formatting:"; gofmt -l .; exit 1; fi'
+        entry: bash -c 'if [ -n "$(gofmt -l . | grep -v zz_generated)" ]; then echo "Files need formatting:"; gofmt -l . | grep -v zz_generated; exit 1; fi'
         language: system
         types: [go]
         pass_filenames: false
