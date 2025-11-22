@@ -119,6 +119,10 @@ linters:
           - govet
         path: api/.*\.go
         text: "fieldalignment"
+      # Exclude TODO comments that reference GitHub issues (e.g., TODO(#3))
+      - source: "TODO\\(#\\d+\\)"
+        linters:
+          - godox
     paths:
       - third_party$
       - builtin$
