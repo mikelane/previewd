@@ -29,6 +29,7 @@ import (
 
 	previewv1alpha1 "github.com/mikelane/previewd/api/v1alpha1"
 	"github.com/mikelane/previewd/internal/controller"
+	"github.com/mikelane/previewd/internal/cost"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -175,8 +176,9 @@ func main() {
 	}
 
 	if err := (&controller.PreviewEnvironmentReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:        mgr.GetClient(),
+		Scheme:        mgr.GetScheme(),
+		CostEstimator: cost.NewEstimator(nil),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PreviewEnvironment")
 		os.Exit(1)
