@@ -73,7 +73,6 @@ func TestReconciler_UpdatesCostEstimate(t *testing.T) {
 					Repository: "org/repo",
 					PRNumber:   123,
 					HeadSHA:    "1234567890123456789012345678901234567890",
-					TTL:        "4h",
 				},
 				Status: previewv1alpha1.PreviewEnvironmentStatus{
 					Phase:     "Ready",

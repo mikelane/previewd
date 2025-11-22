@@ -175,12 +175,9 @@ func (r *PreviewEnvironmentReconciler) estimateAndUpdateCosts(ctx context.Contex
 		return fmt.Errorf("failed to list pods in namespace %s: %w", previewEnv.Status.Namespace, err)
 	}
 
-	// Parse TTL from spec
-	ttl, err := parseTTL(previewEnv.Spec.TTL)
-	if err != nil {
-		logger.Error(err, "Failed to parse TTL, using default", "ttl", previewEnv.Spec.TTL)
-		ttl = 4 * time.Hour
-	}
+	// Use default TTL since TTL field is not yet implemented in the spec
+	// TODO(#5): Add TTL field to PreviewEnvironmentSpec
+	ttl := 4 * time.Hour
 
 	// Check if spot instances should be used
 	useSpot := checkSpotInstance(previewEnv)

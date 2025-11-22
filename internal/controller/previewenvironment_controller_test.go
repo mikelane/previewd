@@ -68,7 +68,6 @@ var _ = Describe("PreviewEnvironment Controller", func() {
 					Repository: "owner/repo",
 					HeadSHA:    "1234567890abcdef1234567890abcdef12345678",
 					PRNumber:   123,
-					TTL:        "4h",
 				},
 			}
 			Expect(k8sClient.Create(ctx, previewenvironment)).To(Succeed())
@@ -414,7 +413,6 @@ var _ = Describe("PreviewEnvironment Controller", func() {
 						Repository: "owner/repo",
 						HeadSHA:    "1234567890abcdef1234567890abcdef12345678",
 						PRNumber:   123,
-						TTL:        "4h",
 					},
 				}
 
@@ -609,7 +607,6 @@ var _ = Describe("PreviewEnvironment Controller", func() {
 						Repository: "owner/repo",
 						HeadSHA:    "1234567890abcdef1234567890abcdef12345678",
 						PRNumber:   123,
-						TTL:        "4h",
 					},
 				}
 				Expect(k8sClient.Create(ctx, previewenvironment)).To(Succeed())
