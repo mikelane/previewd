@@ -56,9 +56,11 @@ jobs:
 
       - name: Check gofmt
         run: |
-          if [ -n "$(gofmt -l .)" ]; then
+          # Exclude generated files from format check
+          FILES=$(gofmt -l . | grep -v 'zz_generated' || true)
+          if [ -n "$FILES" ]; then
             echo "The following files are not formatted:"
-            gofmt -l .
+            echo "$FILES"
             echo "Run 'gofmt -w .' to fix formatting."
             exit 1
           fi
@@ -66,9 +68,11 @@ jobs:
       - name: Check goimports
         run: |
           go install golang.org/x/tools/cmd/goimports@latest
-          if [ -n "$(goimports -l .)" ]; then
+          # Exclude generated files from import check
+          FILES=$(goimports -l . 2>/dev/null | grep -v 'zz_generated' || true)
+          if [ -n "$FILES" ]; then
             echo "The following files have import issues:"
-            goimports -l .
+            echo "$FILES"
             echo "Run 'goimports -w .' to fix imports."
             exit 1
           fi
