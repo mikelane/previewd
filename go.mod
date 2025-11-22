@@ -1,6 +1,6 @@
 module github.com/mikelane/previewd
 
-go 1.24.5
+go 1.24.9
 
 require (
 	github.com/google/go-github/v66 v66.0.0
