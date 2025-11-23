@@ -122,3 +122,104 @@ jobs:
               pull_number: context.payload.pull_request.number,
               reviewers: ['mikelane']
             });
+
+      - name: Move to Done when issue closed
+        if: github.event_name == 'issues' && github.event.action == 'closed'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROJECT_NUMBER: 3
+          ORGANIZATION: mikelane
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue = context.payload.issue;
+
+            // Query to find the project item and update status
+            const mutation = `
+              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $valueId: String!) {
+                updateProjectV2ItemFieldValue(
+                  input: {
+                    projectId: $projectId
+                    itemId: $itemId
+                    fieldId: $fieldId
+                    value: { singleSelectOptionId: $valueId }
+                  }
+                ) {
+                  projectV2Item {
+                    id
+                  }
+                }
+              }
+            `;
+
+            const query = `
+              query($org: String!, $projectNumber: Int!, $issueId: ID!) {
+                user(login: $org) {
+                  projectV2(number: $projectNumber) {
+                    id
+                    field(name: "Status") {
+                      ... on ProjectV2SingleSelectField {
+                        id
+                        options {
+                          id
+                          name
+                        }
+                      }
+                    }
+                    items(first: 100) {
+                      nodes {
+                        id
+                        content {
+                          ... on Issue {
+                            id
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `;
+
+            try {
+              // Get project data
+              const projectData = await github.graphql(query, {
+                org: process.env.ORGANIZATION,
+                projectNumber: parseInt(process.env.PROJECT_NUMBER),
+                issueId: issue.node_id
+              });
+
+              const project = projectData.user.projectV2;
+              const statusField = project.field;
+              const doneOption = statusField.options.find(opt => opt.name === 'Done');
+
+              if (!doneOption) {
+                console.log('Warning: "Done" status not found in project. Available options:', statusField.options.map(o => o.name));
+                return;
+              }
+
+              // Find the project item for this issue
+              const projectItem = project.items.nodes.find(
+                item => item.content && item.content.id === issue.node_id
+              );
+
+              if (!projectItem) {
+                console.log('Issue not found in project board, skipping status update');
+                return;
+              }
+
+              // Update the status to Done
+              await github.graphql(mutation, {
+                projectId: project.id,
+                itemId: projectItem.id,
+                fieldId: statusField.id,
+                valueId: doneOption.id
+              });
+
+              console.log(`Updated issue #${issue.number} status to Done in project board`);
+
+            } catch (error) {
+              console.error('Error updating project board:', error);
+              // Don't fail the workflow if project board update fails
+            }
