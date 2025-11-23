@@ -25,6 +25,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Wait only for required checks to pass (those enforced by branch protection).
+      # This prevents failures when optional checks (like Dependabot workflows) complete with 'skipped' status.
+      # Required checks are defined in branch protection rules and include:
+      # - Lint: Code quality and formatting checks
+      # - Format Check: Go formatting validation
+      # - Security: Security scanning (gosec, trivy)
+      # - Test (Run on Ubuntu): Core test suite
+      # - codecov/patch: New code coverage threshold
+      # - codecov/project: Overall project coverage threshold
+      #
+      # Note: If required checks change in branch protection, update the check-regexp pattern below.
       - name: Wait for all checks to complete
         uses: lewagon/wait-on-check-action@v1.3.4
         with:
@@ -33,6 +44,8 @@ jobs:
           wait-interval: 10
           running-workflow-name: 'Auto-Merge PR'
           allowed-conclusions: success
+          # Only wait for required checks, not optional ones that may be skipped
+          check-regexp: '^(Lint|Format Check|Security|Test \(Run on Ubuntu\)|codecov\/(patch|project))$'
 
       - name: Enable auto-merge with squash
         if: success()
