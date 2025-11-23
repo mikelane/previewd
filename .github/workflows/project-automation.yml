@@ -1,5 +1,26 @@
 name: Project Board Automation
 
+# IMPORTANT: This workflow requires the following configuration to work with user-level projects:
+#
+# 1. Create a Personal Access Token (PAT) with 'project' scope:
+#    - Go to: https://github.com/settings/tokens
+#    - Generate new token (classic)
+#    - Select scope: 'project' (read:project and write:project)
+#    - Copy the token
+#
+# 2. Add the PAT as a repository secret:
+#    - Go to: https://github.com/mikelane/previewd/settings/secrets/actions
+#    - Name: PROJECT_PAT
+#    - Value: [paste your PAT]
+#
+# 3. Enable project automation:
+#    - Go to: https://github.com/mikelane/previewd/settings/variables/actions
+#    - Create variable: PROJECT_AUTOMATION_ENABLED
+#    - Value: true
+#
+# Note: GITHUB_TOKEN cannot access user-level projects, only org-level projects.
+# If these secrets/vars are not configured, the project board steps will be skipped.
+
 on:
   pull_request:
     types: [opened, ready_for_review, review_requested, closed]
@@ -18,11 +39,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Add issue/PR to project
-        if: github.event.action == 'opened'
+        if: github.event.action == 'opened' && vars.PROJECT_AUTOMATION_ENABLED == 'true'
         uses: actions/add-to-project@v1.0.2
         with:
           project-url: https://github.com/users/mikelane/projects/3
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.PROJECT_PAT }}
 
       - name: Move to Code Review when PR opened
         if: github.event_name == 'pull_request' && github.event.action == 'opened'
@@ -124,14 +145,14 @@ jobs:
             });
 
       - name: Move to Done when issue closed
-        if: github.event_name == 'issues' && github.event.action == 'closed'
+        if: github.event_name == 'issues' && github.event.action == 'closed' && vars.PROJECT_AUTOMATION_ENABLED == 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PROJECT_PAT }}
           PROJECT_NUMBER: 3
           ORGANIZATION: mikelane
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.PROJECT_PAT }}
           script: |
             const issue = context.payload.issue;
 
