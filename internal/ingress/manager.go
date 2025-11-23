@@ -180,9 +180,9 @@ func (m *Manager) EnsureIngress(ctx context.Context, preview *previewv1alpha1.Pr
 			preview.Namespace, preview.Name, preview.Spec.PRNumber, err)
 	}
 
-	// TODO(#XX): Add finalizer to PreviewEnvironment controller to cleanup
-	// cross-namespace resources. For now, Ingress will be cleaned up when
-	// the entire namespace is deleted during PreviewEnvironment removal.
+	// TODO(#2): Enhance finalizer to explicitly cleanup cross-namespace resources.
+	// Currently, Ingress is cleaned up when the namespace is deleted during
+	// PreviewEnvironment removal. Consider adding explicit cleanup for safety.
 
 	return nil
 }
