@@ -20,6 +20,7 @@ package ingress
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	previewv1alpha1 "github.com/mikelane/previewd/api/v1alpha1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -45,6 +46,9 @@ const (
 	// SSLRedirectAnnotation is the annotation key for nginx SSL redirect
 	SSLRedirectAnnotation = "nginx.ingress.kubernetes.io/ssl-redirect"
 
+	// FrontendServiceName is the name of the frontend service
+	FrontendServiceName = "frontend"
+
 	managedByLabel = "previewd"
 )
 
@@ -69,6 +73,17 @@ func NewManager(c client.Client, scheme *runtime.Scheme, baseDomain, certIssuer 
 // EnsureIngress creates or updates an Ingress resource for the preview environment
 // with TLS certificates (cert-manager) and DNS routing (external-dns).
 func (m *Manager) EnsureIngress(ctx context.Context, preview *previewv1alpha1.PreviewEnvironment, namespace string) error {
+	// Input validation
+	if preview == nil {
+		return fmt.Errorf("preview environment cannot be nil")
+	}
+	if namespace == "" {
+		return fmt.Errorf("namespace cannot be empty")
+	}
+	if len(preview.Spec.Services) == 0 {
+		return fmt.Errorf("preview must specify at least one service")
+	}
+
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      IngressName,
@@ -112,7 +127,23 @@ func (m *Manager) EnsureIngress(ctx context.Context, preview *previewv1alpha1.Pr
 		pathType := networkingv1.PathTypePrefix
 		var paths []networkingv1.HTTPIngressPath
 
-		for _, service := range preview.Spec.Services {
+		// Sort services: frontend (/) must come LAST for PathTypePrefix to work correctly.
+		// With PathTypePrefix, "/" matches ALL requests, so specific paths like "/auth" must come first.
+		sortedServices := make([]string, len(preview.Spec.Services))
+		copy(sortedServices, preview.Spec.Services)
+		sort.Slice(sortedServices, func(i, j int) bool {
+			// frontend (/) always comes last
+			if sortedServices[i] == FrontendServiceName {
+				return false
+			}
+			if sortedServices[j] == FrontendServiceName {
+				return true
+			}
+			// All other services sorted alphabetically
+			return sortedServices[i] < sortedServices[j]
+		})
+
+		for _, service := range sortedServices {
 			serviceName := generateServiceName(preview.Spec.PRNumber, service)
 			path := generatePathForService(service)
 
@@ -145,8 +176,13 @@ func (m *Manager) EnsureIngress(ctx context.Context, preview *previewv1alpha1.Pr
 	})
 
 	if err != nil {
-		return fmt.Errorf("failed to ensure ingress: %w", err)
+		return fmt.Errorf("failed to ensure ingress for preview %s/%s (PR #%d): %w",
+			preview.Namespace, preview.Name, preview.Spec.PRNumber, err)
 	}
+
+	// TODO(#XX): Add finalizer to PreviewEnvironment controller to cleanup
+	// cross-namespace resources. For now, Ingress will be cleaned up when
+	// the entire namespace is deleted during PreviewEnvironment removal.
 
 	return nil
 }
@@ -164,7 +200,7 @@ func generateServiceName(prNumber int, service string) string {
 // generatePathForService generates the path for a service
 // frontend gets "/", other services get "/<service-name>"
 func generatePathForService(service string) string {
-	if service == "frontend" {
+	if service == FrontendServiceName {
 		return "/"
 	}
 	return fmt.Sprintf("/%s", service)

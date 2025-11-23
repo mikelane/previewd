@@ -652,3 +652,102 @@ func TestGeneratePathForService(t *testing.T) {
 		})
 	}
 }
+
+func TestManager_EnsureIngress_PathOrdering(t *testing.T) {
+	// CRITICAL: This test verifies that "/" (frontend) appears LAST in the paths array.
+	// With PathTypePrefix, "/" matches ALL requests, so specific paths like "/auth" and "/api"
+	// must come BEFORE "/" or they will be unreachable.
+	preview := &previewv1alpha1.PreviewEnvironment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pr-999",
+			Namespace: "previewd-system",
+			UID:       "test-uid-ordering",
+		},
+		Spec: previewv1alpha1.PreviewEnvironmentSpec{
+			PRNumber:   999,
+			Repository: "owner/repo",
+			// Services intentionally in non-sorted order to verify sorting
+			Services: []string{"frontend", "auth", "api"},
+		},
+	}
+	namespace := "preview-pr-999-order999"
+
+	scheme := runtime.NewScheme()
+	if err := previewv1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add preview scheme: %v", err)
+	}
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add core scheme: %v", err)
+	}
+	if err := networkingv1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add networking scheme: %v", err)
+	}
+
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
+
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(ns).
+		Build()
+
+	m := NewManager(c, scheme, "preview.example.com", "letsencrypt-prod")
+	err := m.EnsureIngress(context.Background(), preview, namespace)
+	if err != nil {
+		t.Fatalf("EnsureIngress() error = %v", err)
+	}
+
+	ingress := &networkingv1.Ingress{}
+	err = c.Get(context.Background(), types.NamespacedName{
+		Name:      "preview-ingress",
+		Namespace: namespace,
+	}, ingress)
+	if err != nil {
+		t.Fatalf("failed to get ingress: %v", err)
+	}
+
+	// Verify path count
+	paths := ingress.Spec.Rules[0].HTTP.Paths
+	if len(paths) != 3 {
+		t.Fatalf("expected 3 paths, got %d", len(paths))
+	}
+
+	// CRITICAL: Verify "/" (frontend) is LAST
+	lastPath := paths[len(paths)-1]
+	if lastPath.Path != "/" {
+		t.Errorf("last path should be '/', got %q", lastPath.Path)
+	}
+	if lastPath.Backend.Service.Name != "preview-pr-999-frontend" {
+		t.Errorf("last path should route to frontend service, got %q", lastPath.Backend.Service.Name)
+	}
+
+	// Verify specific paths come BEFORE "/"
+	for i := 0; i < len(paths)-1; i++ {
+		if paths[i].Path == "/" {
+			t.Errorf("path '/' should be last, but found at index %d", i)
+		}
+	}
+
+	// Verify all expected paths exist in correct order
+	// Order should be: /api, /auth, / (alphabetical except "/" last)
+	expectedOrder := []struct {
+		path    string
+		service string
+	}{
+		{"/api", "preview-pr-999-api"},
+		{"/auth", "preview-pr-999-auth"},
+		{"/", "preview-pr-999-frontend"},
+	}
+
+	for i, expected := range expectedOrder {
+		if paths[i].Path != expected.path {
+			t.Errorf("path[%d] = %q, want %q", i, paths[i].Path, expected.path)
+		}
+		if paths[i].Backend.Service.Name != expected.service {
+			t.Errorf("path[%d] service = %q, want %q", i, paths[i].Backend.Service.Name, expected.service)
+		}
+	}
+}
