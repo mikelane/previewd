@@ -29,6 +29,7 @@ import (
 	previewdv1alpha1 "github.com/mikelane/previewd/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // Scheduler manages automatic cleanup of expired PreviewEnvironment resources.
@@ -43,13 +44,13 @@ type Scheduler struct {
 // The scheduler will check for expired environments every interval duration.
 //
 // Parameters:
-//   - client: Kubernetes client for listing and deleting PreviewEnvironments
+//   - k8sClient: Kubernetes client for listing and deleting PreviewEnvironments
 //   - interval: Duration between cleanup runs (e.g., 5*time.Minute)
 //
 // Returns a configured Scheduler ready to start.
-func NewScheduler(client client.Client, interval time.Duration) *Scheduler {
+func NewScheduler(k8sClient client.Client, interval time.Duration) *Scheduler {
 	return &Scheduler{
-		client:   client,
+		client:   k8sClient,
 		interval: interval,
 	}
 }
@@ -66,12 +67,17 @@ func (s *Scheduler) Start(ctx context.Context) error {
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 
+	logger := log.FromContext(ctx)
+
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			_ = s.cleanup(ctx)
+			if err := s.cleanup(ctx); err != nil {
+				logger.Error(err, "cleanup pass failed")
+				// Continue to next tick - don't stop scheduler on transient errors
+			}
 		}
 	}
 }
