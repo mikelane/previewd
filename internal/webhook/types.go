@@ -16,10 +16,10 @@ package webhook
 
 // PullRequestEvent represents a GitHub pull_request webhook event
 type PullRequestEvent struct {
-	Action      string      `json:"action"`
-	Number      int         `json:"number"`
 	PullRequest PullRequest `json:"pull_request"`
 	Repository  Repository  `json:"repository"`
+	Action      string      `json:"action"`
+	Number      int         `json:"number"`
 }
 
 // PullRequest contains PR metadata

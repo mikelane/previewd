@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -33,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+//nolint:gosec // Test secret, not a real credential
 const testSecret = "test-webhook-secret"
 
 func setupTest(t *testing.T) (*Server, client.Client) {
@@ -51,6 +53,7 @@ func setupTest(t *testing.T) (*Server, client.Client) {
 	return server, fakeClient
 }
 
+//nolint:unparam // secret is always testSecret in tests, but keeping parameter for clarity
 func computeSignature(payload []byte, secret string) string {
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write(payload)
@@ -161,7 +164,10 @@ func TestHandlePROpened(t *testing.T) {
 		},
 	}
 
-	payload, _ := json.Marshal(event)
+	payload, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("Failed to marshal test event: %v", err)
+	}
 	signature := computeSignature(payload, testSecret)
 
 	req := httptest.NewRequest("POST", "/webhook", bytes.NewReader(payload))
@@ -177,13 +183,13 @@ func TestHandlePROpened(t *testing.T) {
 
 	// Verify PreviewEnvironment was created
 	preview := &previewv1alpha1.PreviewEnvironment{}
-	err := k8sClient.Get(context.Background(), types.NamespacedName{
+	getErr := k8sClient.Get(context.Background(), types.NamespacedName{
 		Name:      "pr-123",
 		Namespace: "previewd-system",
 	}, preview)
 
-	if err != nil {
-		t.Fatalf("Failed to get PreviewEnvironment: %v", err)
+	if getErr != nil {
+		t.Fatalf("Failed to get PreviewEnvironment: %v", getErr)
 	}
 
 	if preview.Spec.PRNumber != 123 {
@@ -196,6 +202,58 @@ func TestHandlePROpened(t *testing.T) {
 
 	if preview.Spec.HeadSHA != "abc123" {
 		t.Errorf("PreviewEnvironment HeadSHA is %s, expected abc123", preview.Spec.HeadSHA)
+	}
+}
+
+func TestHandlePROpened_AlreadyExists(t *testing.T) {
+	server, k8sClient := setupTest(t)
+
+	// Create existing PreviewEnvironment first
+	existingPreview := &previewv1alpha1.PreviewEnvironment{}
+	//nolint:goconst // Test data, not a meaningful constant
+	existingPreview.Name = "pr-123"
+	//nolint:goconst // Test data, not a meaningful constant
+	existingPreview.Namespace = "previewd-system"
+	existingPreview.Spec.PRNumber = 123
+	existingPreview.Spec.HeadSHA = "oldsha"
+	if err := k8sClient.Create(context.Background(), existingPreview); err != nil {
+		t.Fatalf("Failed to create existing PreviewEnvironment: %v", err)
+	}
+
+	event := PullRequestEvent{
+		Action: "opened",
+		Number: 123,
+		PullRequest: PullRequest{
+			Head: Ref{
+				Ref: "feature/test",
+				SHA: "abc123",
+			},
+			Base: Ref{
+				Ref: "main",
+				SHA: "def456",
+			},
+		},
+		Repository: Repository{
+			FullName: "company/repo",
+		},
+	}
+
+	payload, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("Failed to marshal test event: %v", err)
+	}
+	signature := computeSignature(payload, testSecret)
+
+	req := httptest.NewRequest("POST", "/webhook", bytes.NewReader(payload))
+	req.Header.Set("X-GitHub-Event", "pull_request")
+	req.Header.Set("X-Hub-Signature-256", signature)
+	w := httptest.NewRecorder()
+
+	server.handleWebhook(w, req)
+
+	// Should return Created even though PreviewEnvironment already exists
+	if w.Code != http.StatusCreated {
+		t.Errorf("handleWebhook for PR opened (already exists) returns %d, expected %d", w.Code, http.StatusCreated)
 	}
 }
 
@@ -219,7 +277,10 @@ func TestHandlePRClosed(t *testing.T) {
 		},
 	}
 
-	payload, _ := json.Marshal(event)
+	payload, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("Failed to marshal test event: %v", err)
+	}
 	signature := computeSignature(payload, testSecret)
 
 	req := httptest.NewRequest("POST", "/webhook", bytes.NewReader(payload))
@@ -234,13 +295,45 @@ func TestHandlePRClosed(t *testing.T) {
 	}
 
 	// Verify PreviewEnvironment was deleted
-	err := k8sClient.Get(context.Background(), types.NamespacedName{
+	getErr := k8sClient.Get(context.Background(), types.NamespacedName{
 		Name:      "pr-123",
 		Namespace: "previewd-system",
 	}, preview)
 
-	if err == nil {
+	if getErr == nil {
 		t.Error("PreviewEnvironment still exists after PR closed")
+	}
+}
+
+func TestHandlePRClosed_NotFound(t *testing.T) {
+	server, _ := setupTest(t)
+
+	// Don't create a PreviewEnvironment - test deletion of non-existent resource
+
+	event := PullRequestEvent{
+		Action: "closed",
+		Number: 999, // PR that never had a PreviewEnvironment
+		Repository: Repository{
+			FullName: "company/repo",
+		},
+	}
+
+	payload, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("Failed to marshal test event: %v", err)
+	}
+	signature := computeSignature(payload, testSecret)
+
+	req := httptest.NewRequest("POST", "/webhook", bytes.NewReader(payload))
+	req.Header.Set("X-GitHub-Event", "pull_request")
+	req.Header.Set("X-Hub-Signature-256", signature)
+	w := httptest.NewRecorder()
+
+	server.handleWebhook(w, req)
+
+	// Should return OK even though PreviewEnvironment doesn't exist
+	if w.Code != http.StatusOK {
+		t.Errorf("handleWebhook for PR closed (not found) returns %d, expected %d", w.Code, http.StatusOK)
 	}
 }
 
@@ -270,7 +363,10 @@ func TestHandlePRSynchronized(t *testing.T) {
 		},
 	}
 
-	payload, _ := json.Marshal(event)
+	payload, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("Failed to marshal test event: %v", err)
+	}
 	signature := computeSignature(payload, testSecret)
 
 	req := httptest.NewRequest("POST", "/webhook", bytes.NewReader(payload))
@@ -286,13 +382,13 @@ func TestHandlePRSynchronized(t *testing.T) {
 
 	// Verify PreviewEnvironment was updated
 	updated := &previewv1alpha1.PreviewEnvironment{}
-	err := k8sClient.Get(context.Background(), types.NamespacedName{
+	getErr := k8sClient.Get(context.Background(), types.NamespacedName{
 		Name:      "pr-123",
 		Namespace: "previewd-system",
 	}, updated)
 
-	if err != nil {
-		t.Fatalf("Failed to get updated PreviewEnvironment: %v", err)
+	if getErr != nil {
+		t.Fatalf("Failed to get updated PreviewEnvironment: %v", getErr)
 	}
 
 	if updated.Spec.HeadSHA != "newsha123" {
@@ -321,6 +417,34 @@ func TestRateLimiter(t *testing.T) {
 	// Should allow again after reset
 	if !rl.Allow("test-repo") {
 		t.Error("Request after reset was rate limited, expected to be allowed")
+	}
+}
+
+// TestRateLimiter_Concurrency verifies thread-safe concurrent access
+func TestRateLimiter_Concurrency(t *testing.T) {
+	rl := NewRateLimiter(100, time.Second)
+	repo := "test/repo"
+
+	// Run 50 goroutines making requests concurrently
+	done := make(chan bool)
+	for i := 0; i < 50; i++ {
+		go func() {
+			for j := 0; j < 10; j++ {
+				_ = rl.Allow(repo)
+			}
+			done <- true
+		}()
+	}
+
+	// Wait for all goroutines to finish
+	for i := 0; i < 50; i++ {
+		<-done
+	}
+
+	// Verify rate limiter still works correctly
+	// After 500 requests (50*10), we should be at limit (100 per second)
+	if rl.Allow(repo) {
+		t.Error("Rate limiter allowed request after exceeding limit")
 	}
 }
 
@@ -362,7 +486,10 @@ func TestHandleWebhook_RateLimited(t *testing.T) {
 		},
 	}
 
-	payload, _ := json.Marshal(event)
+	payload, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("Failed to marshal test event: %v", err)
+	}
 	signature := computeSignature(payload, testSecret)
 
 	// Send 11 requests
@@ -386,6 +513,29 @@ func TestHandleWebhook_RateLimited(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestHandleWebhook_BodyReadFailure verifies that body read errors are handled correctly
+func TestHandleWebhook_BodyReadFailure(t *testing.T) {
+	server, _ := setupTest(t)
+
+	// Create a request with a body that will error on read
+	req := httptest.NewRequest("POST", "/webhook", &errorReader{})
+	req.Header.Set("X-GitHub-Event", "pull_request")
+	w := httptest.NewRecorder()
+
+	server.handleWebhook(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("handleWebhook with read error returns %d, expected %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+// errorReader always returns an error when Read is called
+type errorReader struct{}
+
+func (e *errorReader) Read(p []byte) (n int, err error) {
+	return 0, io.ErrUnexpectedEOF
 }
 
 func TestSanitizeLabel(t *testing.T) {

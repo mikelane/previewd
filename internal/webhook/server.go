@@ -24,34 +24,35 @@ import (
 	"sync"
 	"time"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-
 	previewv1alpha1 "github.com/mikelane/previewd/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // Server handles GitHub webhook requests
 type Server struct {
-	addr          string
-	port          int
 	client        client.Client
-	webhookSecret string
 	server        *http.Server
 	rateLimiter   *RateLimiter
+	addr          string
+	webhookSecret string
+	port          int
 }
 
 // RateLimiter provides per-repository rate limiting
 type RateLimiter struct {
-	mu       sync.Mutex
 	limiters map[string]*bucket
-	limit    int
 	window   time.Duration
+	maxAge   time.Duration // Max age before cleaning up inactive buckets
+	mu       sync.Mutex
+	limit    int
 }
 
 type bucket struct {
-	tokens    int
 	lastReset time.Time
+	lastUsed  time.Time
+	tokens    int
 }
 
 // NewServer creates a new webhook server
@@ -71,6 +72,7 @@ func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 		limiters: make(map[string]*bucket),
 		limit:    limit,
 		window:   window,
+		maxAge:   1 * time.Hour, // Clean up buckets inactive for 1 hour
 	}
 }
 
@@ -79,11 +81,15 @@ func (rl *RateLimiter) Allow(repo string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
+	// Cleanup inactive buckets to prevent memory leak
+	rl.cleanup()
+
 	b, exists := rl.limiters[repo]
 	if !exists {
 		b = &bucket{
 			tokens:    rl.limit,
 			lastReset: time.Now(),
+			lastUsed:  time.Now(),
 		}
 		rl.limiters[repo] = b
 	}
@@ -94,12 +100,26 @@ func (rl *RateLimiter) Allow(repo string) bool {
 		b.lastReset = time.Now()
 	}
 
+	// Update last used time
+	b.lastUsed = time.Now()
+
 	if b.tokens > 0 {
 		b.tokens--
 		return true
 	}
 
 	return false
+}
+
+// cleanup removes buckets that haven't been used recently
+// Must be called with mu locked
+func (rl *RateLimiter) cleanup() {
+	now := time.Now()
+	for repo, b := range rl.limiters {
+		if now.Sub(b.lastUsed) > rl.maxAge {
+			delete(rl.limiters, repo)
+		}
+	}
 }
 
 // Start starts the webhook server
@@ -109,8 +129,12 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/healthz", s.handleHealth)
 
 	s.server = &http.Server{
-		Addr:    fmt.Sprintf("%s:%d", s.addr, s.port),
-		Handler: mux,
+		Addr:              fmt.Sprintf("%s:%d", s.addr, s.port),
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Start server in goroutine
@@ -143,7 +167,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // handleHealth handles health check requests
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	if _, err := w.Write([]byte("OK")); err != nil {
+		log.Log.Error(err, "Failed to write health check response")
+	}
 }
 
 // handleWebhook handles GitHub webhook requests
@@ -163,7 +189,11 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to read body", http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
+	defer func() {
+		if closeErr := r.Body.Close(); closeErr != nil {
+			logger.Error(closeErr, "Failed to close request body")
+		}
+	}()
 
 	// Validate signature
 	signature := r.Header.Get("X-Hub-Signature-256")

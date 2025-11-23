@@ -18,9 +18,11 @@ import (
 	"testing"
 )
 
+const signatureTestSecret = "test-secret"
+
 // TestValidateSignature_ValidSignature verifies that a correctly signed payload is accepted
 func TestValidateSignature_ValidSignature(t *testing.T) {
-	secret := "test-secret"
+	secret := signatureTestSecret
 	payload := []byte(`{"action":"opened","number":123}`)
 	// Precomputed HMAC-SHA256: echo -n '{"action":"opened","number":123}' | openssl dgst -sha256 -hmac 'test-secret'
 	signature := "sha256=2c4854fbccd6d98cff684aedfef5f0edee3d89d30c1bae27c7e111bc1e82c282"
@@ -34,7 +36,7 @@ func TestValidateSignature_ValidSignature(t *testing.T) {
 
 // TestValidateSignature_InvalidSignature verifies that an incorrectly signed payload is rejected
 func TestValidateSignature_InvalidSignature(t *testing.T) {
-	secret := "test-secret"
+	secret := signatureTestSecret
 	payload := []byte(`{"action":"opened","number":123}`)
 	signature := "sha256=0000000000000000000000000000000000000000000000000000000000000000"
 
@@ -47,7 +49,7 @@ func TestValidateSignature_InvalidSignature(t *testing.T) {
 
 // TestValidateSignature_MissingSignature verifies that missing signature is rejected
 func TestValidateSignature_MissingSignature(t *testing.T) {
-	secret := "test-secret"
+	secret := signatureTestSecret
 	payload := []byte(`{"action":"opened","number":123}`)
 	signature := ""
 
@@ -60,7 +62,7 @@ func TestValidateSignature_MissingSignature(t *testing.T) {
 
 // TestValidateSignature_WrongAlgorithm verifies that SHA1 signatures are rejected
 func TestValidateSignature_WrongAlgorithm(t *testing.T) {
-	secret := "test-secret"
+	secret := signatureTestSecret
 	payload := []byte(`{"action":"opened","number":123}`)
 	signature := "sha1=2c4854fbccd6d98cff684aedfef5f0edee3d89d30c1bae27"
 
