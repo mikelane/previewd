@@ -103,41 +103,84 @@ This document describes the technical architecture of Previewd, an AI-powered Ku
 
 **Responsibility:** Receive GitHub webhook events and create/update PreviewEnvironment CRs
 
+**Implementation Status:** ✅ IMPLEMENTED (Issue #4)
+
 **Implementation:**
 ```go
 // internal/webhook/server.go
-type WebhookServer struct {
-    client    client.Client
-    validator *Validator
-    aiEngine  *ai.Engine
+type Server struct {
+    client          client.Client
+    webhookSecret   string
+    port            int
+    logger          logr.Logger
 }
 
-func (s *WebhookServer) HandlePullRequest(w http.ResponseWriter, r *http.Request) {
-    // 1. Validate GitHub signature
+func (s *Server) HandlePullRequest(w http.ResponseWriter, r *http.Request) {
+    // 1. Validate GitHub signature (HMAC-SHA256)
     // 2. Parse webhook payload
-    // 3. Determine action (opened, synchronize, closed)
+    // 3. Determine action (opened, synchronize, closed, reopened)
     // 4. Create/Update/Delete PreviewEnvironment CR
-    // 5. Optionally call AI for initial analysis
+    // 5. Return appropriate HTTP status
 }
 ```
 
 **Endpoints:**
-- `POST /webhook/github` - GitHub webhook receiver
-- `GET /health` - Health check
-- `GET /metrics` - Prometheus metrics
+- `POST /webhook` - GitHub webhook receiver
+- `GET /healthz` - Health check
+- `GET /readyz` - Readiness check
 
 **Security:**
 - Validates GitHub webhook signatures (HMAC-SHA256)
-- Rate limiting (10 requests/second per repo)
-- Authentication via bearer token
+- Signature validation in `internal/webhook/signature.go`
+- Rejects requests with invalid or missing signatures
+- Logs all webhook events for audit trail
 
-### 2. AI Engine
+### 2. GitHub Client
+
+**Responsibility:** Interact with GitHub API for PR metadata and commit status updates
+
+**Implementation Status:** ✅ IMPLEMENTED (Issue #5)
+
+**Implementation:**
+```go
+// internal/github/client.go
+type Client struct {
+    token      string
+    httpClient *http.Client
+    logger     logr.Logger
+}
+
+func (c *Client) GetPullRequest(ctx context.Context, owner, repo string, number int) (*PullRequest, error) {
+    // Fetch PR metadata from GitHub API
+}
+
+func (c *Client) UpdateCommitStatus(ctx context.Context, owner, repo, sha string, status *CommitStatus) error {
+    // Update commit status with preview URL and deployment state
+}
+```
+
+**Features:**
+- Fetches PR metadata (title, author, SHA, branches)
+- Updates commit status with preview environment URL
+- Implements retry logic with exponential backoff
+- Respects GitHub API rate limits
+- Uses GitHub API v3 (REST)
+
+**Commit Status Updates:**
+- Context: `previewd`
+- States: `pending`, `success`, `failure`
+- Includes preview URL as target URL
+- Updates shown in PR checks UI
+
+### 3. AI Engine (v0.2.0)
 
 **Responsibility:** Analyze code changes, generate test data, predict costs
 
+**Implementation Status:** 🔮 PLANNED FOR v0.2.0
+
 **Modules:**
 
-#### 2.1 Code Analyzer
+#### 3.1 Code Analyzer
 ```go
 // internal/ai/code_analyzer.go
 type CodeAnalyzer struct {
@@ -160,7 +203,7 @@ func (a *CodeAnalyzer) DetectServices(diff string) ([]string, error) {
 - TTL: 7 days
 - Invalidation: On CRD deletion
 
-#### 2.2 Data Generator
+#### 3.2 Data Generator
 ```go
 // internal/ai/data_generator.go
 type DataGenerator struct {
@@ -184,7 +227,7 @@ func (g *DataGenerator) GenerateSyntheticData(schema *Schema, count int) (*Datas
 - Privacy: never use real production data
 - Performance: generate in parallel for large datasets
 
-#### 2.3 Cost Predictor
+#### 3.3 Cost Predictor
 ```go
 // internal/ai/cost_predictor.go
 type CostPredictor struct {
@@ -204,6 +247,8 @@ func (p *CostPredictor) PredictLifespan(pr *PullRequest) (time.Duration, error) 
 ### 3. Reconciliation Controller
 
 **Responsibility:** Manage lifecycle of PreviewEnvironment resources
+
+**Implementation Status:** ✅ IMPLEMENTED (Issue #2)
 
 **Core reconciliation logic:**
 ```go
@@ -235,6 +280,8 @@ Pending → Provisioning → Ready → Testing → Complete
 ### 4. Namespace Manager
 
 **Responsibility:** Create and manage isolated namespaces per PR
+
+**Implementation Status:** ✅ IMPLEMENTED (Issue #3)
 
 **Implementation:**
 ```go
@@ -352,11 +399,34 @@ func (m *Manager) EnsureIngress(env *PreviewEnvironment) (*networkingv1.Ingress,
 - Pattern: `pr-{number}.preview.example.com`
 - Wildcard cert: `*.preview.example.com` (or per-PR cert)
 
-### 7. Cost Optimizer
+### 7. Cost Estimator
 
-**Responsibility:** Optimize resource usage and costs
+**Responsibility:** Calculate and track costs for preview environments
 
-**Strategies:**
+**Implementation Status:** ✅ IMPLEMENTED (Issue #9)
+
+**Core implementation:**
+```go
+// internal/cost/estimator.go
+type Estimator struct {
+    client client.Client
+    pricing PricingConfig
+}
+
+func (e *Estimator) EstimateCost(ctx context.Context, namespace string) (*CostEstimate, error) {
+    // 1. Query all pods in namespace
+    // 2. Sum CPU and memory requests
+    // 3. Calculate costs based on pricing config
+    // 4. Return hourly, daily, and monthly estimates
+}
+```
+
+**Pricing Configuration:**
+- CPU: $0.04 per core per hour (configurable)
+- Memory: $0.005 per GB per hour (configurable)
+- Configured via `--cpu-price-per-hour` and `--memory-price-per-gb-hour` flags
+
+**Cost Optimization Strategies (Future):**
 
 #### 7.1 Resource Sizing
 ```go
@@ -400,6 +470,56 @@ func (o *Optimizer) DetermineTTL(env *PreviewEnvironment) time.Duration {
     // Max: 7 days (force cleanup)
 }
 ```
+
+### 8. Cleanup Scheduler
+
+**Responsibility:** Automatically delete expired preview environments based on TTL
+
+**Implementation Status:** ✅ IMPLEMENTED (Issue #8)
+
+**Implementation:**
+```go
+// internal/cleanup/scheduler.go
+type Scheduler struct {
+    client   client.Client
+    interval time.Duration
+    logger   logr.Logger
+}
+
+func (s *Scheduler) Start(ctx context.Context) error {
+    // Run periodic cleanup every interval (default: 5 minutes)
+    ticker := time.NewTicker(s.interval)
+    for {
+        select {
+        case <-ticker.C:
+            s.cleanupExpired(ctx)
+        case <-ctx.Done():
+            return ctx.Err()
+        }
+    }
+}
+
+func (s *Scheduler) cleanupExpired(ctx context.Context) {
+    // 1. List all PreviewEnvironments
+    // 2. Check status.expiresAt vs current time
+    // 3. Delete expired environments
+    // 4. Respect "do-not-expire" label override
+    // 5. Emit Kubernetes events
+}
+```
+
+**Features:**
+- Runs every 5 minutes (configurable via `--cleanup-interval` flag)
+- Checks `status.expiresAt` timestamp for each PreviewEnvironment
+- Gracefully skips environments with `preview.previewd.io/do-not-expire: "true"` label
+- Emits Kubernetes event with reason "TTLExpired" on deletion
+- Respects context cancellation for graceful shutdown
+- Logs cleanup actions for audit trail
+
+**Expiration Logic:**
+- `expiresAt = createdAt + TTL`
+- Default TTL: 4 hours
+- Maximum TTL: 7 days (configurable)
 
 ---
 

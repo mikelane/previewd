@@ -61,12 +61,17 @@ git push origin feature/new-auth
 - [x] Go environment setup
 - [x] Kubebuilder operator scaffold
 - [x] Custom Resource Definitions (v1alpha1)
-- [ ] Basic reconciliation loop
-- [ ] GitHub webhook integration
+- [x] Basic reconciliation loop
+- [x] GitHub webhook integration
+- [x] Namespace manager with ResourceQuotas
+- [x] Cost estimator for resource tracking
+- [x] TTL-based cleanup scheduler
+- [x] GitHub client for PR metadata
 - [ ] ArgoCD integration
-- [ ] AI code analysis
-- [ ] Synthetic data generation
-- [ ] Cost optimization
+- [ ] Ingress/DNS routing
+- [ ] AI code analysis (v0.2.0)
+- [ ] Synthetic data generation (v0.2.0)
+- [ ] Advanced cost optimization (v0.2.0)
 
 See [ROADMAP.md](ROADMAP.md) for detailed timeline.
 
