@@ -31,9 +31,10 @@ previewd/
 │   │   ├── status.go                    # Commit status updates
 │   │   └── mock_client.go               # Mock for testing
 │   ├── argocd/
-│   │   ├── applicationset.go            # ApplicationSet CRUD
-│   │   ├── applicationset_builder.go    # Builder pattern
-│   │   └── applicationset_test.go
+│   │   ├── doc.go                       # Package documentation
+│   │   ├── manager.go                   # Manager with build/ensure/delete/status
+│   │   ├── manager_test.go              # Comprehensive tests
+│   │   └── types.go                     # ArgoCD CRD types (minimal)
 │   ├── ai/                              # v0.2.0+
 │   │   ├── analyzer.go                  # Code analysis interface
 │   │   ├── openai_analyzer.go           # OpenAI implementation
@@ -798,23 +799,53 @@ func (c *githubClient) UpdateCommitStatus(ctx context.Context, owner, repo, sha 
 ## 5. ArgoCD Integration (`internal/argocd/`)
 
 ### Responsibility
-- Build ApplicationSet manifests
-- Create/update/delete ApplicationSets
-- Watch Application readiness
+- Build ApplicationSet manifests with list generator
+- Create/update/delete ApplicationSets (idempotent)
+- Query Application health and sync status
+- Owner reference tracking via annotations (cross-namespace)
 
 ### Interface
 
 ```go
-type Manager interface {
-    BuildApplicationSet(preview *previewv1alpha1.PreviewEnvironment, services []string) *argov1alpha1.ApplicationSet
-    GetApplicationStatus(ctx context.Context, name string) (*ApplicationStatus, error)
+// Manager handles ArgoCD ApplicationSet lifecycle for preview environments
+type Manager struct {
+    client          client.Client
+    scheme          *runtime.Scheme
+    repoURL         string
+    argocdNamespace string
+    project         string
 }
 
-type ApplicationStatus struct {
-    Health string  // Healthy, Degraded, Progressing
-    Sync   string  // Synced, OutOfSync
+// NewManager creates a new ArgoCD manager
+func NewManager(c client.Client, scheme *runtime.Scheme, repoURL, argocdNamespace, project string) *Manager
+
+// BuildApplicationSet creates an ApplicationSet for a preview environment
+func (m *Manager) BuildApplicationSet(preview *previewv1alpha1.PreviewEnvironment, namespace string) *ApplicationSet
+
+// EnsureApplicationSet creates or updates an ApplicationSet
+func (m *Manager) EnsureApplicationSet(ctx context.Context, preview *previewv1alpha1.PreviewEnvironment, namespace string) error
+
+// DeleteApplicationSet removes an ApplicationSet (idempotent)
+func (m *Manager) DeleteApplicationSet(ctx context.Context, name, namespace string) error
+
+// GetApplicationStatus retrieves health and sync status
+func (m *Manager) GetApplicationStatus(ctx context.Context, name, namespace string) (*ApplicationStatusInfo, error)
+
+// GetApplicationSetName generates the name for a PR number
+func (m *Manager) GetApplicationSetName(prNumber int) string
+
+type ApplicationStatusInfo struct {
+    Health  string  // Healthy, Degraded, Progressing
+    Sync    string  // Synced, OutOfSync
+    Message string  // Optional details
 }
 ```
+
+### Local Types
+
+The package defines minimal ArgoCD CRD types in `types.go` to avoid the complex
+transitive dependencies from the full ArgoCD package. Types are compatible with
+ArgoCD v2.x CRDs and include DeepCopy methods for runtime.Object interface.
 
 ### ApplicationSet Pattern
 
@@ -866,10 +897,13 @@ spec:
 ```
 
 **Key Decisions**:
-- ApplicationSet generates Application per service
-- Owner reference from PreviewEnvironment → ApplicationSet (cascade delete)
-- Automated sync with prune (GitOps)
-- Namespace created automatically
+- ApplicationSet generates Application per service using list generator
+- Go templating enabled with `missingkey=error` for safer templating
+- Owner tracking via annotations (cross-namespace owner refs not allowed)
+- Automated sync with prune and self-heal (GitOps)
+- Namespace created by previewd (CreateNamespace=false)
+- Retry strategy with exponential backoff (5s to 3m, 5 retries)
+- Minimal local types to avoid ArgoCD dependency issues
 
 ---
 
