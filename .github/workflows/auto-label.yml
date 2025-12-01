@@ -42,7 +42,7 @@ jobs:
           fail_if_xl: 'false'
 
       - name: Label based on title
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const title = context.payload.pull_request?.title || context.payload.issue?.title;
