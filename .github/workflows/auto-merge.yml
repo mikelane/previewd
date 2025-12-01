@@ -23,7 +23,7 @@ jobs:
     if: github.event.pull_request.user.login == 'mikelane' || github.event.check_suite.pull_requests[0].user.login == 'mikelane'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # Wait only for required checks to pass (those enforced by branch protection).
       # This prevents failures when optional checks (like Dependabot workflows) complete with 'skipped' status.
