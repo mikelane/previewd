@@ -206,7 +206,7 @@ jobs:
           make cover
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           use_oidc: true  # Use OIDC authentication instead of token
           files: ./coverage.out
