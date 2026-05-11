@@ -40,7 +40,7 @@ jobs:
     steps:
       - name: Add issue/PR to project
         if: github.event.action == 'opened' && vars.PROJECT_AUTOMATION_ENABLED == 'true'
-        uses: actions/add-to-project@v1.0.2
+        uses: actions/add-to-project@v2.0.0
         with:
           project-url: https://github.com/users/mikelane/projects/3
           github-token: ${{ secrets.PROJECT_PAT }}
