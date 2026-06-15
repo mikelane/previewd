@@ -37,7 +37,7 @@ jobs:
       #
       # Note: If required checks change in branch protection, update the check-regexp pattern below.
       - name: Wait for all checks to complete
-        uses: lewagon/wait-on-check-action@v1.3.4
+        uses: lewagon/wait-on-check-action@v1.8.0
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           repo-token: ${{ secrets.GITHUB_TOKEN }}
